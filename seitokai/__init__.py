@@ -29,3 +29,18 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+from __future__ import annotations
+
+__all__: list[str] = []
+
+__author__ = "Faster Speeding"
+__ci__ = ""
+__copyright__ = "© 2021 Faster Speeding"
+__coverage__ = ""
+__docs__ = "https://fasterspeeding.github.io/Seitokai/"
+__email__ = "lucina@lmbyrne.dev"
+__issue_tracker__ = "https://github.com/FasterSpeeding/Seitokai/issues"
+__license__ = "BSD"
+__url__ = "https://github.com/FasterSpeeding/Seitokai"
+__version__ = "0.1.0a1"
+__git_sha1__ = "HEAD"

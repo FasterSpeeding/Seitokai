@@ -9,7 +9,7 @@ TARGET_PROJECT_NAME = "seitokai"
 
 def load_meta_data():
     pattern = re.compile(r"__(?P<key>\w+)__\s=\s\"(?P<value>.+)\"")
-    with open(os.path.join(MAIN_MODULE_NAME, "about.py"), "r") as file:
+    with open(os.path.join(MAIN_MODULE_NAME, "__init__.py"), "r") as file:
         code = file.read()
 
     groups = dict(group.groups() for group in pattern.finditer(code))
@@ -45,8 +45,7 @@ setuptools.setup(
         "Intended Audience :: Developers",
         "Natural Language :: English",
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: Implementation :: CPython",
         "Topic :: Communications :: Chat",
         "Topic :: Internet :: WWW/HTTP",
