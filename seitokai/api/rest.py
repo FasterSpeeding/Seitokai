@@ -45,6 +45,7 @@ if typing.TYPE_CHECKING:
 UUIDish: typing.TypeAlias = str | uuid.UUID
 
 
+@typing.runtime_checkable
 class RestClient(typing.Protocol):
     __slots__ = ()
 

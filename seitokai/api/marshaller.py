@@ -46,6 +46,7 @@ JsonObjectT: typing.TypeAlias = dict[str, typing.Any]
 JsonIsh: typing.TypeAlias = str | int | float | bool | JsonArrayT | JsonObjectT
 
 
+@typing.runtime_checkable
 class Marshaller(typing.Protocol):
     __slots__ = ()
 

@@ -99,9 +99,9 @@ class RestClient:
 
     async def __aexit__(
         self,
-        exception_type: type[BaseException] | None,
-        exception: BaseException | None,
-        exception_traceback: types.TracebackType | None,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: types.TracebackType | None,
     ) -> None:
         await self.close()
 

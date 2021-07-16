@@ -31,13 +31,40 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = []
+__all__: list[str] = ["Stream"]
 
 import typing
 
-ValueT_co = typing.TypeVar("ValueT_co", covariant=True)
+if typing.TYPE_CHECKING:
+    import types
+
+_T = typing.TypeVar("_T")
+T_co = typing.TypeVar("T_co", covariant=True)
 
 
 @typing.runtime_checkable
-class Paginator(typing.Protocol[ValueT_co]):
+class Stream(typing.Protocol[T_co]):
     __slots__ = ()
+
+    def __aiter__(self: _T) -> _T:
+        raise NotImplementedError
+
+    async def __anext__(self) -> T_co:
+        raise NotImplementedError
+
+    def __enter__(self: _T) -> _T:
+        raise NotImplementedError
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
+        raise NotImplementedError
+
+    def close(self) -> None:
+        raise NotImplementedError
+
+    async def receive(self) -> T_co:
+        raise NotImplementedError

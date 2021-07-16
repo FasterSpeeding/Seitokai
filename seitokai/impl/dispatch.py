@@ -31,13 +31,47 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = []
+__all__: list[str] = ["Listener"]
 
+import dataclasses
 import typing
 
-ValueT_co = typing.TypeVar("ValueT_co", covariant=True)
+import anyio
+import anyio.abc as anyio_abc
+
+if typing.TYPE_CHECKING:
+    from collections import abc as collections
+
+    from ..api import dispatch
 
 
-@typing.runtime_checkable
-class Paginator(typing.Protocol[ValueT_co]):
-    __slots__ = ()
+_T = typing.TypeVar("_T")
+_IdentifierT = typing.TypeVar("_IdentifierT")
+
+
+@dataclasses.dataclass(eq=True, slots=True, unsafe_hash=True)
+class Listener(typing.Generic[_IdentifierT, _T]):
+    identifier: _IdentifierT = dataclasses.field(compare=False, hash=False)
+    callback: collections.Callable[[_T], collections.Coroutine[typing.Any, typing.Any, None]] = dataclasses.field(
+        compare=True, hash=True
+    )
+    _task_group: anyio_abc.TaskGroup | None = dataclasses.field(compare=False, default=None, hash=False, init=False)
+
+    async def _stream(self, stream: dispatch.Stream[_T], task_group: anyio_abc.TaskGroup) -> None:
+        with stream:
+            async for event in stream:
+                task_group.start_soon(self.callback, event)
+
+    async def activate(self, stream: dispatch.Stream[_T]) -> None:
+        self._task_group = anyio.create_task_group()
+        await self._task_group.__aenter__()
+        self._task_group.start_soon(self._stream, stream, self._task_group)
+
+    async def deactivate(self):
+        if not self._task_group:
+            raise RuntimeError("Listener isn't active")
+
+        self._task_group.cancel_scope.cancel()
+        task_group = self._task_group
+        self._task_group = None
+        await task_group.__aexit__(None, None, None)

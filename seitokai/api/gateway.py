@@ -38,15 +38,25 @@ import typing
 if typing.TYPE_CHECKING:
     from collections import abc as collections
 
+    from . import dispatch
+
 _T = typing.TypeVar("_T")
 RawEventT: typing.TypeAlias = "collections.Mapping[str, typing.Any]"
-CallbackSig: typing.TypeAlias = collections.Callable[[RawEventT], collections.Awaitable[None]]
+CallbackSig: typing.TypeAlias = "collections.Callable[[RawEventT], collections.Coroutine[typing.Any, typing.Any, None]]"
+CallbackSigT = typing.TypeVar("CallbackSigT", bound=CallbackSig)
 
 
+@typing.runtime_checkable
 class WebsocketClient(typing.Protocol):
     __slots__ = ()
 
+    def stream(self, name: str, /) -> dispatch.Stream[RawEventT]:
+        raise NotImplementedError
+
     def add_raw_listener(self: _T, event_name: str, callback: CallbackSig, /) -> _T:
+        raise NotImplementedError
+
+    def with_raw_listener(self, name: str, /) -> collections.Callable[[CallbackSigT], CallbackSigT]:
         raise NotImplementedError
 
     def remove_raw_listener(self, event_name: str, callback: CallbackSig, /) -> None:

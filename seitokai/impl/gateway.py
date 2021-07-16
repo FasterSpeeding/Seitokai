@@ -33,19 +33,26 @@ from __future__ import annotations
 
 __all__: list[str] = ["WebsocketClient", "DEFAULT_URL"]
 
+import itertools
 import json
 import logging
+import types
 import typing
 
 import anyio
 import asyncwebsockets  # type: ignore
 import wsproto
 from anyio import abc as anyio_abc
+from anyio.streams import memory as memory_streams
+
+from ..api import dispatch as dispatch_api
+from . import dispatch
 
 if typing.TYPE_CHECKING:
     import ssl
+    from collections import abc as collections
 
-    from ..api import gateway
+    from ..api import gateway as gateway_api
 
     WebsocketClientT = typing.TypeVar("WebsocketClientT", bound="WebsocketClient")
 
@@ -66,15 +73,38 @@ _PONG: typing.Final[wsproto.events.Pong] = wsproto.events.Pong()
 
 
 class WebsocketClient:
-    __slots__: tuple[str, ...] = ("_client", "_close_event", "_last_message_id", "_listeners", "_token", "_url")
+    __slots__: tuple[str, ...] = (
+        "_client",
+        "_close_event",
+        "_last_message_id",
+        "_listeners",
+        "_streams",
+        "_task_group",
+        "_token",
+        "_url",
+    )
 
     def __init__(self, token: str, /, *, url: str = DEFAULT_URL) -> None:
         self._client: asyncwebsockets.Websocket | None = None
         self._close_event: anyio.Event | None = None
         self._last_message_id: None | str = None
-        self._listeners: dict[str, set[gateway.CallbackSig]] = dict()
+        self._listeners: dict[str, dict[gateway_api.CallbackSig, dispatch.Listener[str, gateway_api.RawEventT]]] = {}
+        self._streams: dict[
+            str,
+            tuple[
+                memory_streams.MemoryObjectSendStream[gateway_api.RawEventT],
+                memory_streams.MemoryObjectReceiveStream[gateway_api.RawEventT],
+            ],
+        ] = {}
+        self._task_group: anyio_abc.TaskGroup | None = None
         self._token = f"Bearer {token}"
         self._url = url
+
+    def _get_task_group(self) -> anyio_abc.TaskGroup:
+        if self._task_group:
+            return self._task_group
+
+        raise RuntimeError("Websocket client is inactive")
 
     def _get_ws(self) -> asyncwebsockets.Websocket:
         if self._client:
@@ -100,7 +130,8 @@ class WebsocketClient:
 
     async def _keep_alive(self) -> None:
         ws = self._get_ws()
-        async with anyio.create_task_group() as task_group:
+        task_group = self._get_task_group()
+        async with task_group:
             await self._wait_for_hello(ws, task_group)
             await self._receive_events(ws)
             task_group.cancel_scope.cancel()
@@ -165,7 +196,10 @@ class WebsocketClient:
         opcode = payload.get("op")
 
         if opcode == 0:
-            ...
+            event_name: str = payload["t"]
+
+            if stream := self._streams.get(event_name):
+                stream[0].send_nowait(types.MappingProxyType(payload))
 
         else:
             _LOGGER.warning("Ignoring unexpected opcode %s for event payload %r", payload, message)
@@ -174,26 +208,60 @@ class WebsocketClient:
         client = self._get_ws()
         self._client = None
         await client.close()
+        for listener in itertools.chain.from_iterable(map(lambda m: m.values(), self._listeners.values())):
+            await listener.deactivate()
 
-    async def start(self, ssl_context: bool | ssl.SSLContext = True) -> None:
+    async def start(self, *, ssl_context: bool | ssl.SSLContext = True) -> None:
         if self._client:
             raise RuntimeError("Websocket client already running")
 
         self._client = await asyncwebsockets.create_websocket(
             self._url, ssl=ssl_context, headers=[(_AUTHORIZATION_HEADER_KEY, self._token)]
         )
+        for listener in itertools.chain.from_iterable(map(lambda m: m.values(), self._listeners.values())):
+            await listener.activate(self.stream(listener.identifier))
+
+        self._task_group = anyio.create_task_group()
         await self._keep_alive()
 
-    def add_raw_listener(self: WebsocketClientT, name: str, callback: gateway.CallbackSig, /) -> WebsocketClientT:
+    def stream(self, name: str, /) -> dispatch_api.Stream[gateway_api.RawEventT]:
         try:
-            self._listeners[name].add(callback)
+            stream = self._streams[name][1].clone()
+            assert isinstance(stream, dispatch_api.Stream)
+            return stream
 
         except KeyError:
-            self._listeners[name] = {callback}
+            streams = self._streams[name] = anyio.create_memory_object_stream()
+            stream = streams[1].clone()
+            assert isinstance(stream, dispatch_api.Stream)
+            return stream
+
+    def add_raw_listener(self: WebsocketClientT, name: str, callback: gateway_api.CallbackSig, /) -> WebsocketClientT:
+        listener = dispatch.Listener(name, callback)
+        try:
+            if callback in self._listeners[name]:
+                return self
+
+            self._listeners[name][callback] = listener
+
+        except KeyError:
+            self._listeners[name] = {callback: listener}
+
+        if self._task_group:
+            self._task_group.start_soon(listener.activate, self.stream(name))
 
         return self
 
-    def remove_raw_listener(self, name: str, callback: gateway.CallbackSig, /) -> None:
-        self._listeners[name].remove(callback)
-        if not self._listeners[name]:
-            del self._listeners[name]
+    def with_raw_listener(
+        self, name: str, /
+    ) -> collections.Callable[[gateway_api.CallbackSigT], gateway_api.CallbackSigT]:
+        def decorator(callback: gateway_api.CallbackSigT, /) -> gateway_api.CallbackSigT:
+            self.add_raw_listener(name, callback)
+            return callback
+
+        return decorator
+
+    def remove_raw_listener(self, name: str, callback: gateway_api.CallbackSig, /) -> None:
+        listener = self._listeners[name].pop(callback)
+        if self._task_group:
+            self._task_group.start_soon(listener.deactivate)
