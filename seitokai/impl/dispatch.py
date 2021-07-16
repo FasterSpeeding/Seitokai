@@ -31,46 +31,52 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["Listener"]
+__all__: list[str] = ["Dispatchable"]
 
 import dataclasses
 import typing
 
 import anyio
-import anyio.abc as anyio_abc
 
 if typing.TYPE_CHECKING:
-    from collections import abc as collections
+    import anyio.abc as anyio_abc
+    from anyio.streams import memory as memory_streams
 
-    from ..api import dispatch
-
+    from ..api import dispatch as dispatch_api
 
 _T = typing.TypeVar("_T")
-_IdentifierT = typing.TypeVar("_IdentifierT")
 
 
-@dataclasses.dataclass(eq=True, slots=True, unsafe_hash=True)
-class Listener(typing.Generic[_IdentifierT, _T]):
-    identifier: _IdentifierT = dataclasses.field(compare=False, hash=False)
-    callback: collections.Callable[[_T], collections.Coroutine[typing.Any, typing.Any, None]] = dataclasses.field(
-        compare=True, hash=True
-    )
-    _cancel_scope: anyio_abc.CancelScope | None = dataclasses.field(compare=False, default=None, hash=False, init=False)
+@dataclasses.dataclass(slots=True)
+class Dispatchable(typing.Generic[_T]):
+    callbacks: list[dispatch_api.CallbackSig[_T]] = dataclasses.field(default_factory=list, init=False)
+    streams: list[memory_streams.MemoryObjectSendStream[_T]] = dataclasses.field(default_factory=list, init=False)
 
-    async def _stream(
-        self, stream: dispatch.Stream[_T], cancel_scope: anyio.CancelScope, task_group: anyio_abc.TaskGroup
-    ) -> None:
-        with (cancel_scope, stream):
-            async for event in stream:
-                task_group.start_soon(self.callback, event)
+    @property
+    def is_empty(self) -> bool:
+        return not self.callbacks and not self.streams
 
-    def activate(self, stream: dispatch.Stream[_T], task_group: anyio_abc.TaskGroup) -> None:
-        self._cancel_scope = anyio.CancelScope()
-        task_group.start_soon(self._stream, stream, self._cancel_scope, task_group)
+    def add_callback(self, callback: dispatch_api.CallbackSig[_T], /) -> None:
+        self.callbacks.append(callback)
 
-    def deactivate(self):
-        if not self._cancel_scope:
-            raise RuntimeError("Listener isn't active")
+    def remove_callback(self, callback: dispatch_api.CallbackSig[_T], /) -> None:
+        self.callbacks.remove(callback)
 
-        self._cancel_scope.cancel()
-        self._cancel_scope = None
+    def stream(self, *, buffer_size: int = 100) -> memory_streams.MemoryObjectReceiveStream[_T]:
+        send, recv = anyio.create_memory_object_stream(buffer_size)
+        self.streams.append(send)
+        return recv
+
+    def dispatch(self, task_group: anyio_abc.TaskGroup, value: _T) -> None:
+        for stream in self.streams.copy():
+            try:
+                stream.send_nowait(value)
+
+            except (anyio.BrokenResourceError, anyio.ClosedResourceError):
+                self.streams.remove(stream)
+
+            except anyio.WouldBlock:
+                pass
+
+        for callback in self.callbacks:
+            task_group.start_soon(callback, value)

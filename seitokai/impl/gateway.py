@@ -33,7 +33,6 @@ from __future__ import annotations
 
 __all__: list[str] = ["WebsocketClient", "DEFAULT_URL"]
 
-import itertools
 import json
 import logging
 import types
@@ -42,15 +41,15 @@ import typing
 import anyio
 import asyncwebsockets  # type: ignore
 import wsproto
-from anyio import abc as anyio_abc
-from anyio.streams import memory as memory_streams
 
 from ..api import dispatch as dispatch_api
-from . import dispatch
+from . import dispatch as dispatch_impl
 
 if typing.TYPE_CHECKING:
     import ssl
     from collections import abc as collections
+
+    from anyio import abc as anyio_abc
 
     from ..api import gateway as gateway_api
 
@@ -77,24 +76,17 @@ class WebsocketClient:
         "_client",
         "_close_event",
         "_last_message_id",
-        "_listeners",
-        "_streams",
-        "_stream_buffer_size",
+        "_raw_dispatchers",
         "_task_group",
         "_token",
         "_url",
     )
 
-    def __init__(self, token: str, /, *, url: str = DEFAULT_URL, stream_buffer_size: int = 1000) -> None:
+    def __init__(self, token: str, /, *, url: str = DEFAULT_URL) -> None:
         self._client: asyncwebsockets.Websocket | None = None
         self._close_event: anyio.Event | None = None
         self._last_message_id: None | str = None
-        self._listeners: dict[str, dict[gateway_api.CallbackSig, dispatch.Listener[str, gateway_api.RawEventT]]] = {}
-        self._streams: dict[
-            str,
-            typing.List[memory_streams.MemoryObjectSendStream[gateway_api.RawEventT]],
-        ] = {}
-        self._stream_buffer_size = stream_buffer_size
+        self._raw_dispatchers: dict[str, dispatch_impl.Dispatchable[gateway_api.RawEventT]] = {}
         self._task_group: anyio_abc.TaskGroup | None = None
         self._token = f"Bearer {token}"
         self._url = url
@@ -121,23 +113,20 @@ class WebsocketClient:
             data = ws._connection.send(_PING)
             await ws._sock.send(data)
 
-    async def _heartbeat(self, delay: float, cancel: anyio.CancelScope) -> None:
-        client = self._get_ws()
+    async def _heartbeat(self, ws: asyncwebsockets.Websocket, delay: float, cancel: anyio.CancelScope) -> None:
         with cancel:
             _LOGGER.debug("Sending heartbeat ping")
-            await self._send_raw_event(client, _PING)
+            await self._send_raw_event(ws, _PING)
             await anyio.sleep(delay)
 
-    async def _keep_alive(self) -> None:
-        ws = self._get_ws()
-        task_group = self._get_task_group()
+    async def _keep_alive(self, ws: asyncwebsockets.Websocket, task_group: anyio_abc.TaskGroup) -> None:
         cancel_heartbeat = anyio.CancelScope()
         async with task_group:
             await self._wait_for_hello(ws, task_group, cancel_heartbeat)
-            await self._receive_events(ws)
+            await self._receive_events(ws, task_group)
             cancel_heartbeat.cancel()
 
-    async def _receive_events(self, ws: asyncwebsockets.Websocket) -> None:
+    async def _receive_events(self, ws: asyncwebsockets.Websocket, task_group: anyio_abc.TaskGroup) -> None:
         stream = aiter(ws)
         while True:
             try:
@@ -153,7 +142,7 @@ class WebsocketClient:
 
             match event:  # CloseConnection is translated to StopAsyncIteration
                 case wsproto.events.TextMessage(data):
-                    await self._handle_message(ws, data)
+                    await self._handle_message(ws, task_group, data)
                 case wsproto.events.BytesMessage():
                     _LOGGER.info(
                         "Skipping bytes event as byte messages aren't implemeneted"
@@ -169,7 +158,6 @@ class WebsocketClient:
     async def _wait_for_hello(
         self, ws: asyncwebsockets.Websocket, task_group: anyio_abc.TaskGroup, cancel_heartbeat: anyio.CancelScope
     ) -> None:
-        ws = self._get_ws()
         event = await anext(aiter(ws), None)
 
         if not event:
@@ -179,22 +167,11 @@ class WebsocketClient:
         data: dict[str, typing.Any] = json.loads(event.data)["d"]
         self._last_message_id = data["lastMessageId"]
         heartbeat_interval: int = data["heartbeatIntervalMs"]
-        task_group.start_soon(self._heartbeat, heartbeat_interval / 1000, cancel_heartbeat)
+        task_group.start_soon(self._heartbeat, ws, heartbeat_interval / 1000, cancel_heartbeat)
 
-    def _dispatch(self, event_name: str, payload: gateway_api.RawEventT) -> None:
-        payload_proxy = types.MappingProxyType(payload)
-        if streams := self._streams.get(event_name):
-            for stream in streams.copy():
-                try:
-                    stream.send_nowait(payload_proxy)
-
-                except (anyio.BrokenResourceError, anyio.ClosedResourceError):
-                    streams.remove(stream)
-
-                except anyio.WouldBlock:
-                    pass
-
-    async def _handle_message(self, ws: asyncwebsockets.Websocket, message: str, /) -> None:
+    async def _handle_message(
+        self, ws: asyncwebsockets.Websocket, task_group: anyio_abc.TaskGroup, message: str, /
+    ) -> None:
         try:
             payload = json.loads(message)
 
@@ -211,9 +188,8 @@ class WebsocketClient:
 
         opcode = payload.get("op")
 
-        if opcode == 0:
-            event_name: str = payload["t"]
-            self._dispatch(event_name, payload)
+        if opcode == 0 and (dispatcher := self._raw_dispatchers.get(payload["t"])):
+            dispatcher.dispatch(task_group, types.MappingProxyType(payload))
 
         else:
             _LOGGER.warning("Ignoring unexpected opcode %s for event payload %r", payload, message)
@@ -224,10 +200,6 @@ class WebsocketClient:
         self._client = None
         self._task_group = None
         await client.close()
-
-        for listener in itertools.chain.from_iterable(map(lambda m: m.values(), self._listeners.values())):
-            listener.deactivate()
-
         task_group.cancel_scope.cancel()
 
     async def start(self, *, ssl_context: bool | ssl.SSLContext = True) -> None:
@@ -238,49 +210,39 @@ class WebsocketClient:
             self._url, ssl=ssl_context, headers=[(_AUTHORIZATION_HEADER_KEY, self._token)]
         )
         self._task_group = anyio.create_task_group()
-        for listener in itertools.chain.from_iterable(map(lambda m: m.values(), self._listeners.values())):
-            listener.activate(self.stream(listener.identifier), self._task_group)
 
-        await self._keep_alive()
+        await self._keep_alive(self._client, self._task_group)
 
-    def stream(self, name: str, /) -> dispatch_api.Stream[gateway_api.RawEventT]:
-        send, recv = anyio.create_memory_object_stream(self._stream_buffer_size)
-
+    def _get_or_create_dispatchable(self, event_name: str) -> dispatch_impl.Dispatchable[gateway_api.RawEventT]:
         try:
-            self._streams[name].append(send)
+            return self._raw_dispatchers[event_name]
 
         except KeyError:
-            self._streams[name] = [send]
+            dispatcher = self._raw_dispatchers[event_name] = dispatch_impl.Dispatchable()
+            return dispatcher
 
-        assert isinstance(recv, dispatch_api.Stream)
-        return recv
+    def stream(self, event_name: str, /, *, buffer_size: int = 100) -> dispatch_api.Stream[gateway_api.RawEventT]:
+        stream = self._get_or_create_dispatchable(event_name).stream(buffer_size=buffer_size)
+        assert isinstance(stream, dispatch_api.Stream)
+        return stream
 
-    def add_raw_listener(self: WebsocketClientT, name: str, callback: gateway_api.CallbackSig, /) -> WebsocketClientT:
-        listener = dispatch.Listener(name, callback)
-        try:
-            if callback in self._listeners[name]:
-                return self
-
-            self._listeners[name][callback] = listener
-
-        except KeyError:
-            self._listeners[name] = {callback: listener}
-
-        if self._task_group:
-            listener.activate(self.stream(name), self._task_group)
-
+    def add_raw_listener(
+        self: WebsocketClientT, event_name: str, callback: gateway_api.CallbackSig, /
+    ) -> WebsocketClientT:
+        self._get_or_create_dispatchable(event_name).add_callback(callback)
         return self
 
     def with_raw_listener(
-        self, name: str, /
+        self, event_name: str, /
     ) -> collections.Callable[[gateway_api.CallbackSigT], gateway_api.CallbackSigT]:
         def decorator(callback: gateway_api.CallbackSigT, /) -> gateway_api.CallbackSigT:
-            self.add_raw_listener(name, callback)
+            self.add_raw_listener(event_name, callback)
             return callback
 
         return decorator
 
-    def remove_raw_listener(self, name: str, callback: gateway_api.CallbackSig, /) -> None:
-        listener = self._listeners[name].pop(callback)
-        if self._task_group:
-            listener.deactivate()
+    def remove_raw_listener(self, event_name: str, callback: gateway_api.CallbackSig, /) -> None:
+        dispatcher = self._raw_dispatchers[event_name]
+        dispatcher.remove_callback(callback)
+        if dispatcher.is_empty:
+            del self._raw_dispatchers[event_name]

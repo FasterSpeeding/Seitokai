@@ -31,15 +31,17 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["Stream"]
+__all__: list[str] = ["CallbackSig", "Stream"]
 
 import typing
+from collections import abc as collections
 
 if typing.TYPE_CHECKING:
     import types
 
 _T = typing.TypeVar("_T")
 T_co = typing.TypeVar("T_co", covariant=True)
+CallbackSig: typing.TypeAlias = collections.Callable[[_T], collections.Coroutine[typing.Any, typing.Any, None]]
 
 
 @typing.runtime_checkable

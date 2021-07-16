@@ -33,6 +33,7 @@ from __future__ import annotations
 
 __all__: list[str] = ["Marshaller"]
 
+import typing
 import uuid
 
 import ciso8601
@@ -42,10 +43,12 @@ from .. import lists
 from .. import messages
 from .. import reactions
 from .. import users
-from ..api import marshaller
+
+if typing.TYPE_CHECKING:
+    from ..api import marshaller as marshaller_api
 
 
-def get_creator_info(data: marshaller.JsonObjectT, /) -> tuple[str, users.CreatorType]:
+def get_creator_info(data: marshaller_api.JsonObjectT, /) -> tuple[str, users.CreatorType]:
     if webhook_id := data.get("createdByWebhookId"):
         return (webhook_id, users.CreatorType.WEBHOOK)
 
@@ -60,7 +63,7 @@ class Marshaller:
 
     # fourms
 
-    def unmarshall_fourm_thread(self, data: marshaller.JsonObjectT, /) -> forums.ForumThread:
+    def unmarshall_fourm_thread(self, data: marshaller_api.JsonObjectT, /) -> forums.ForumThread:
         creator_id, creator_type = get_creator_info(data)
         return forums.ForumThread(
             id=data["id"],
@@ -71,7 +74,7 @@ class Marshaller:
 
     # lists
 
-    def unmarshall_list_item(self, data: marshaller.JsonObjectT, /) -> lists.ListItem:
+    def unmarshall_list_item(self, data: marshaller_api.JsonObjectT, /) -> lists.ListItem:
         creator_id, creator_type = get_creator_info(data)
         return lists.ListItem(
             id=data["id"],
@@ -84,7 +87,7 @@ class Marshaller:
 
     # messages
 
-    def unmarshall_message(self, data: marshaller.JsonObjectT, /) -> messages.Message:
+    def unmarshall_message(self, data: marshaller_api.JsonObjectT, /) -> messages.Message:
         creator_id, creator_type = get_creator_info(data)
         raw_updated_at = data.get("updatedAt")
         return messages.Message(
@@ -99,7 +102,7 @@ class Marshaller:
 
     # reactions
 
-    def unmarshall_content_reaction(self, data: marshaller.JsonObjectT, /) -> reactions.ContentReaction:
+    def unmarshall_content_reaction(self, data: marshaller_api.JsonObjectT, /) -> reactions.ContentReaction:
         creator_id, creator_type = get_creator_info(data)
         return reactions.ContentReaction(
             id=data["id"],

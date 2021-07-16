@@ -34,15 +34,13 @@ from __future__ import annotations
 __all__: list[str] = ["WebsocketClient"]
 
 import typing
+from collections import abc as collections
 
-if typing.TYPE_CHECKING:
-    from collections import abc as collections
-
-    from . import dispatch
+from . import dispatch
 
 _T = typing.TypeVar("_T")
-RawEventT: typing.TypeAlias = "collections.Mapping[str, typing.Any]"
-CallbackSig: typing.TypeAlias = "collections.Callable[[RawEventT], collections.Coroutine[typing.Any, typing.Any, None]]"
+RawEventT: typing.TypeAlias = collections.Mapping[str, typing.Any]
+CallbackSig: typing.TypeAlias = dispatch.CallbackSig[RawEventT]
 CallbackSigT = typing.TypeVar("CallbackSigT", bound=CallbackSig)
 
 

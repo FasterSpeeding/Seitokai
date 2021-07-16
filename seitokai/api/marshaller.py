@@ -31,7 +31,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["JsonArrayT", "JsonObjectT", "JsonIsh", "Marshaller"]
+__all__: list[str] = ["JsonArrayT", "JsonObjectT", "JsonIsh", "Marshaller", "TopLevelJsonIsh"]
 
 import typing
 
@@ -43,6 +43,7 @@ if typing.TYPE_CHECKING:
 
 JsonArrayT: typing.TypeAlias = list[typing.Any]
 JsonObjectT: typing.TypeAlias = dict[str, typing.Any]
+TopLevelJsonIsh: typing.TypeAlias = JsonArrayT | JsonObjectT
 JsonIsh: typing.TypeAlias = str | int | float | bool | JsonArrayT | JsonObjectT
 
 

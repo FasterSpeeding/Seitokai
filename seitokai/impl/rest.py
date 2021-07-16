@@ -45,10 +45,10 @@ if typing.TYPE_CHECKING:
 
     from .. import forums
     from .. import messages
-    from ..api import marshaller as marshaller_
-    from ..api import paginator
+    from ..api import marshaller as marshaller_api
+    from ..api import paginator as paginator_api
 
-    _JsonObjectT_inv = typing.TypeVar("_JsonObjectT_inv", bound=marshaller_.JsonObjectT)
+    _JsonObjectT_inv = typing.TypeVar("_JsonObjectT_inv", bound=marshaller_api.JsonObjectT)
 
 _ValueT = typing.TypeVar("_ValueT")
 
@@ -57,7 +57,9 @@ UndefinedOr: typing.TypeAlias = types.EllipsisType | _ValueT
 UndefinedNoneOr: typing.TypeAlias = types.EllipsisType | None | _ValueT
 
 
-def _put_undefined(json: _JsonObjectT_inv, name: str, value: UndefinedOr[marshaller_.JsonIsh], /) -> _JsonObjectT_inv:
+def _put_undefined(
+    json: _JsonObjectT_inv, name: str, value: UndefinedOr[marshaller_api.JsonIsh], /
+) -> _JsonObjectT_inv:
     if value is not ...:
         json[name] = value
 
@@ -84,7 +86,7 @@ class RestClient:
         self,
         token: str | None,
         /,
-        marshaller: marshaller_.Marshaller,
+        marshaller: marshaller_api.Marshaller,
         *,
         base_url: str = STANDARD_URL,
     ) -> None:
@@ -115,7 +117,7 @@ class RestClient:
         token: str | None,
         /,
         *,
-        marshaller: marshaller_.Marshaller | None = None,
+        marshaller: marshaller_api.Marshaller | None = None,
         base_url: str = STANDARD_URL,
         verify: str | bool | ssl.SSLContext = True,
         # cert: str | tuple[str, str | None] | tuple[str, str | None, str | None] | None = None,
@@ -176,10 +178,10 @@ class RestClient:
         self,
         method: str,
         route: str,
-        json: marshaller_.JsonArrayT | marshaller_.JsonObjectT | None = None,
+        json: marshaller_api.TopLevelJsonIsh | None = None,
         *,
         use_auth: bool = True,
-    ) -> marshaller_.JsonArrayT | marshaller_.JsonObjectT | None:
+    ) -> marshaller_api.TopLevelJsonIsh | None:
         if self._client is None:
             raise RuntimeError("Cannot use an inactive client")
 
@@ -204,29 +206,29 @@ class RestClient:
     async def delete(self, route: str, /, *, use_auth: bool = True) -> None:
         await self._request(_DELETE, route, use_auth=use_auth)
 
-    async def get(self, route: str, /, *, use_auth: bool = True) -> marshaller_.JsonObjectT | marshaller_.JsonArrayT:
+    async def get(self, route: str, /, *, use_auth: bool = True) -> marshaller_api.TopLevelJsonIsh:
         response = await self._request(_GET, route, use_auth=use_auth)
         assert response is not None, "GET shouldn't ever return no body"
         return response
 
     async def patch(
-        self, route: str, /, json: marshaller_.JsonArrayT | marshaller_.JsonObjectT, *, use_auth: bool = True
-    ) -> marshaller_.JsonArrayT | marshaller_.JsonObjectT | None:
+        self, route: str, /, json: marshaller_api.TopLevelJsonIsh, *, use_auth: bool = True
+    ) -> marshaller_api.TopLevelJsonIsh | None:
         return await self._request(_PATCH, route, json=json, use_auth=use_auth)
 
     async def post(
-        self, route: str, /, json: marshaller_.JsonArrayT | marshaller_.JsonObjectT, *, use_auth: bool = True
-    ) -> marshaller_.JsonArrayT | marshaller_.JsonObjectT | None:
+        self, route: str, /, json: marshaller_api.TopLevelJsonIsh, *, use_auth: bool = True
+    ) -> marshaller_api.TopLevelJsonIsh | None:
         return await self._request(_POST, route, json=json, use_auth=use_auth)
 
     async def put(
         self,
         route: str,
         /,
-        json: marshaller_.JsonArrayT | marshaller_.JsonObjectT | None = None,
+        json: marshaller_api.TopLevelJsonIsh | None = None,
         *,
         use_auth: bool = True,
-    ) -> marshaller_.JsonArrayT | marshaller_.JsonObjectT | None:
+    ) -> marshaller_api.TopLevelJsonIsh | None:
         return await self._request(_PUT, route, json=json, use_auth=use_auth)
 
     async def post_member_role(self, user_id: str, role_id: int, /) -> None:
@@ -246,14 +248,14 @@ class RestClient:
     # Forums
 
     async def post_channel_forum(self, channel_id: UuidIsh, /, *, title: str, content: str) -> forums.ForumThread:
-        payload: marshaller_.JsonObjectT = {"title": title, "content": content}
+        payload: marshaller_api.JsonObjectT = {"title": title, "content": content}
         response = await self.post(f"/channels/{channel_id}/forum", json=payload)
         assert isinstance(response, dict)
         return self._marshaller.unmarshall_fourm_thread(response["forumThread"])
 
     # Chat
 
-    def _build_message(self, content: str, /) -> marshaller_.JsonObjectT:
+    def _build_message(self, content: str, /) -> marshaller_api.JsonObjectT:
         return {"content": content}
 
     async def post_channel_message(self, channel_id: UuidIsh, /, content: str) -> messages.Message:
@@ -262,7 +264,7 @@ class RestClient:
         assert isinstance(response, dict)
         return self._marshaller.unmarshall_message(response["message"])
 
-    async def iter_channel_messages(self, channel_id: UuidIsh, /) -> paginator.Paginator[messages.Message]:
+    async def iter_channel_messages(self, channel_id: UuidIsh, /) -> paginator_api.Paginator[messages.Message]:
         raise NotImplementedError
 
     async def get_channel_message(self, channel_id: UuidIsh, message_id: UuidIsh, /) -> messages.Message:
@@ -287,7 +289,7 @@ class RestClient:
     # List items
 
     async def post_channel_list(self, channel_id: UuidIsh, /, message: str, *, note: UndefinedOr[str] = ...) -> ...:
-        payload: marshaller_.JsonObjectT = {"message": message}
+        payload: marshaller_api.JsonObjectT = {"message": message}
         _put_undefined(payload, "note", note)
         response = await self.post(f"/channels/{channel_id}/list", json=payload)
         assert isinstance(response, dict)
@@ -296,7 +298,7 @@ class RestClient:
     # Team XP
 
     async def post_member_xp(self, user_id: UuidIsh, /, amount: int) -> int:
-        payload: marshaller_.JsonObjectT = {"amount": amount}
+        payload: marshaller_api.JsonObjectT = {"amount": amount}
         response = await self.post(f"/members/{user_id}/xp", json=payload)
         assert isinstance(response, dict)
         result = response["amount"]
@@ -304,5 +306,5 @@ class RestClient:
         return result
 
     async def post_role_xp(self, role_id: UuidIsh, /, amount: int) -> None:
-        payload: marshaller_.JsonObjectT = {"amount": amount}
+        payload: marshaller_api.JsonObjectT = {"amount": amount}
         await self.post(f"/roles/{role_id}/xp", json=payload)
