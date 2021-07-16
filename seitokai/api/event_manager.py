@@ -31,17 +31,23 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["CallbackSig", "Stream"]
+__all__: list[str] = ["EventT", "CallbackSig", "EventCallbackSig", "EventCallbackSigT", "Stream"]
 
 import typing
 from collections import abc as collections
+
+from ..events import base_events
 
 if typing.TYPE_CHECKING:
     import types
 
 _T = typing.TypeVar("_T")
 T_co = typing.TypeVar("T_co", covariant=True)
+RawEventT: typing.TypeAlias = collections.Mapping[str, typing.Any]
 CallbackSig: typing.TypeAlias = collections.Callable[[_T], collections.Coroutine[typing.Any, typing.Any, None]]
+EventCallbackSig = CallbackSig[base_events.BaseEvent]
+EventCallbackSigT = typing.TypeVar("EventCallbackSigT", bound=EventCallbackSig)
+EventT = typing.TypeVar("EventT", bound=base_events.BaseEvent)
 
 
 @typing.runtime_checkable
@@ -69,4 +75,25 @@ class Stream(typing.Protocol[T_co]):
         raise NotImplementedError
 
     async def receive(self) -> T_co:
+        raise NotImplementedError
+
+
+class EventManager(typing.Protocol):
+    __slots__ = ()
+
+    def dispatch(self, event: base_events.BaseEvent, /) -> None:
+        raise NotImplementedError
+
+    def stream(self, event_type: type[EventT], /, *, buffer_size: int = 100) -> Stream[EventT]:
+        raise NotImplementedError
+
+    def add_listener(self: _T, event_type: type[EventT], callback: CallbackSig[EventT], /) -> _T:
+        raise NotImplementedError
+
+    def with_listener(
+        self, event_type: type[base_events.BaseEvent], /
+    ) -> collections.Callable[[EventCallbackSigT], EventCallbackSigT]:
+        raise NotImplementedError
+
+    def remove_listener(self, event_type: type[EventT], callback: CallbackSig[EventT], /) -> None:
         raise NotImplementedError

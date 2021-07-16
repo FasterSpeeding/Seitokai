@@ -42,8 +42,8 @@ import anyio
 import asyncwebsockets  # type: ignore
 import wsproto
 
-from ..api import dispatch as dispatch_api
-from . import dispatch as dispatch_impl
+from ..api import event_manager as event_manager_api
+from . import event_manager as event_manager_impl
 
 if typing.TYPE_CHECKING:
     import ssl
@@ -53,7 +53,7 @@ if typing.TYPE_CHECKING:
 
     from ..api import gateway as gateway_api
 
-    WebsocketClientT = typing.TypeVar("WebsocketClientT", bound="WebsocketClient")
+    _WebsocketClientT = typing.TypeVar("_WebsocketClientT", bound="WebsocketClient")
 
 
 _AUTHORIZATION_HEADER_KEY: typing.Final[str] = "Authorization"
@@ -63,18 +63,14 @@ _PING: typing.Final[wsproto.events.Ping] = wsproto.events.Ping()
 _PONG: typing.Final[wsproto.events.Pong] = wsproto.events.Pong()
 
 
-# class _Disconnect(Exception):
-#     __slots__: tuple[str, ...] = ()
-
-
-# class _Reconnect(Exception):
-#     __slots__: tuple[str, ...] = ()
+class _Disconnect(Exception):
+    __slots__: tuple[str, ...] = ()
 
 
 class WebsocketClient:
     __slots__: tuple[str, ...] = (
         "_client",
-        "_close_event",
+        "_join_event",
         "_last_message_id",
         "_raw_dispatchers",
         "_task_group",
@@ -84,9 +80,9 @@ class WebsocketClient:
 
     def __init__(self, token: str, /, *, url: str = DEFAULT_URL) -> None:
         self._client: asyncwebsockets.Websocket | None = None
-        self._close_event: anyio.Event | None = None
-        self._last_message_id: None | str = None
-        self._raw_dispatchers: dict[str, dispatch_impl.Dispatchable[gateway_api.RawEventT]] = {}
+        self._join_event: anyio.Event | None = None
+        self._last_message_id: str | None = None
+        self._raw_dispatchers: dict[str, event_manager_impl.Dispatchable[event_manager_api.RawEventT]] = {}
         self._task_group: anyio_abc.TaskGroup | None = None
         self._token = f"Bearer {token}"
         self._url = url
@@ -121,10 +117,15 @@ class WebsocketClient:
 
     async def _keep_alive(self, ws: asyncwebsockets.Websocket, task_group: anyio_abc.TaskGroup) -> None:
         cancel_heartbeat = anyio.CancelScope()
-        async with task_group:
-            await self._wait_for_hello(ws, task_group, cancel_heartbeat)
+        await self._wait_for_hello(ws, task_group, cancel_heartbeat)
+
+        # while True:  # TODO: reconnect logic
+        try:
             await self._receive_events(ws, task_group)
+
+        except _Disconnect:
             cancel_heartbeat.cancel()
+            return
 
     async def _receive_events(self, ws: asyncwebsockets.Websocket, task_group: anyio_abc.TaskGroup) -> None:
         stream = aiter(ws)
@@ -196,39 +197,53 @@ class WebsocketClient:
 
     async def close(self) -> None:
         client = self._get_ws()
-        task_group = self._get_task_group()
         self._client = None
-        self._task_group = None
         await client.close()
-        task_group.cancel_scope.cancel()
 
-    async def start(self, *, ssl_context: bool | ssl.SSLContext = True) -> None:
+    async def run(self, *, ssl_context: bool | ssl.SSLContext = True) -> None:
         if self._client:
             raise RuntimeError("Websocket client already running")
 
-        self._client = await asyncwebsockets.create_websocket(
+        self._client = client = await asyncwebsockets.create_websocket(
             self._url, ssl=ssl_context, headers=[(_AUTHORIZATION_HEADER_KEY, self._token)]
         )
-        self._task_group = anyio.create_task_group()
+        self._task_group = task_group = anyio.create_task_group()
+        async with task_group:
+            await self._keep_alive(client, task_group)
 
-        await self._keep_alive(self._client, self._task_group)
+            if self._join_event:
+                self._join_event.set()
 
-    def _get_or_create_dispatchable(self, event_name: str) -> dispatch_impl.Dispatchable[gateway_api.RawEventT]:
+            task_group.cancel_scope.cancel()
+            self._task_group = None
+
+    async def join(self) -> None:
+        if not self._client:
+            raise RuntimeError("Websocket client isn't running")
+
+        if not self._join_event:
+            self._join_event = anyio.Event()
+
+        await self._join_event.wait()
+
+    def _get_or_create_dispatchable(
+        self, event_name: str
+    ) -> event_manager_impl.Dispatchable[event_manager_api.RawEventT]:
         try:
             return self._raw_dispatchers[event_name]
 
         except KeyError:
-            dispatcher = self._raw_dispatchers[event_name] = dispatch_impl.Dispatchable()
+            dispatcher = self._raw_dispatchers[event_name] = event_manager_impl.Dispatchable()
             return dispatcher
 
-    def stream(self, event_name: str, /, *, buffer_size: int = 100) -> dispatch_api.Stream[gateway_api.RawEventT]:
-        stream = self._get_or_create_dispatchable(event_name).stream(buffer_size=buffer_size)
-        assert isinstance(stream, dispatch_api.Stream)
-        return stream
+    def stream(
+        self, event_name: str, /, *, buffer_size: int = 100
+    ) -> event_manager_api.Stream[event_manager_api.RawEventT]:
+        return self._get_or_create_dispatchable(event_name).stream_abstract(buffer_size=buffer_size)
 
     def add_raw_listener(
-        self: WebsocketClientT, event_name: str, callback: gateway_api.CallbackSig, /
-    ) -> WebsocketClientT:
+        self: _WebsocketClientT, event_name: str, callback: gateway_api.CallbackSig, /
+    ) -> _WebsocketClientT:
         self._get_or_create_dispatchable(event_name).add_callback(callback)
         return self
 

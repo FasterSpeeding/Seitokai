@@ -31,52 +31,8 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["Dispatchable"]
-
-import dataclasses
-import typing
-
-import anyio
-
-if typing.TYPE_CHECKING:
-    import anyio.abc as anyio_abc
-    from anyio.streams import memory as memory_streams
-
-    from ..api import dispatch as dispatch_api
-
-_T = typing.TypeVar("_T")
+__all__: list[str] = ["BaseEvent"]
 
 
-@dataclasses.dataclass(slots=True)
-class Dispatchable(typing.Generic[_T]):
-    callbacks: list[dispatch_api.CallbackSig[_T]] = dataclasses.field(default_factory=list, init=False)
-    streams: list[memory_streams.MemoryObjectSendStream[_T]] = dataclasses.field(default_factory=list, init=False)
-
-    @property
-    def is_empty(self) -> bool:
-        return not self.callbacks and not self.streams
-
-    def add_callback(self, callback: dispatch_api.CallbackSig[_T], /) -> None:
-        self.callbacks.append(callback)
-
-    def remove_callback(self, callback: dispatch_api.CallbackSig[_T], /) -> None:
-        self.callbacks.remove(callback)
-
-    def stream(self, *, buffer_size: int = 100) -> memory_streams.MemoryObjectReceiveStream[_T]:
-        send, recv = anyio.create_memory_object_stream(buffer_size)
-        self.streams.append(send)
-        return recv
-
-    def dispatch(self, task_group: anyio_abc.TaskGroup, value: _T) -> None:
-        for stream in self.streams.copy():
-            try:
-                stream.send_nowait(value)
-
-            except (anyio.BrokenResourceError, anyio.ClosedResourceError):
-                self.streams.remove(stream)
-
-            except anyio.WouldBlock:
-                pass
-
-        for callback in self.callbacks:
-            task_group.start_soon(callback, value)
+class BaseEvent:
+    __slots__: tuple[str, ...] = ()
