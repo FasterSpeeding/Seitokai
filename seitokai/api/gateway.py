@@ -31,20 +31,23 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["ContentReaction"]
+__all__: list[str] = ["WebsocketClient"]
 
-import dataclasses
 import typing
 
 if typing.TYPE_CHECKING:
-    import datetime
+    from collections import abc as collections
 
-    from . import users
+_T = typing.TypeVar("_T")
+RawEventT: typing.TypeAlias = "collections.Mapping[str, typing.Any]"
+CallbackSig: typing.TypeAlias = collections.Callable[[RawEventT], collections.Awaitable[None]]
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, unsafe_hash=True)
-class ContentReaction:
-    id: int = dataclasses.field(compare=True, hash=True)
-    created_at: datetime.datetime = dataclasses.field(compare=False, hash=False)
-    creator_id: str = dataclasses.field(compare=False, hash=False)
-    creator_type: users.CreatorType = dataclasses.field(compare=False, hash=False)
+class WebsocketClient(typing.Protocol):
+    __slots__ = ()
+
+    def add_raw_listener(self: _T, event_name: str, callback: CallbackSig, /) -> _T:
+        raise NotImplementedError
+
+    def remove_raw_listener(self, event_name: str, callback: CallbackSig, /) -> None:
+        raise NotImplementedError

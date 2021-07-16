@@ -37,7 +37,6 @@ import typing
 import uuid
 
 if typing.TYPE_CHECKING:
-
     from .. import forums
     from .. import messages
     from . import paginator

@@ -45,7 +45,7 @@ from .. import users
 from ..api import marshaller
 
 
-def _get_created_by(data: marshaller.JsonObjectT, /) -> tuple[str, users.CreatorType]:
+def get_creator_info(data: marshaller.JsonObjectT, /) -> tuple[str, users.CreatorType]:
     if webhook_id := data.get("createdByWebhookId"):
         return (webhook_id, users.CreatorType.WEBHOOK)
 
@@ -58,8 +58,10 @@ def _get_created_by(data: marshaller.JsonObjectT, /) -> tuple[str, users.Creator
 class Marshaller:
     __slots__: tuple[str, ...] = ()
 
+    # fourms
+
     def unmarshall_fourm_thread(self, data: marshaller.JsonObjectT, /) -> forums.ForumThread:
-        creator_id, creator_type = _get_created_by(data)
+        creator_id, creator_type = get_creator_info(data)
         return forums.ForumThread(
             id=data["id"],
             created_at=ciso8601.parse_datetime(data["createdAt"]),
@@ -67,8 +69,23 @@ class Marshaller:
             creator_type=creator_type,
         )
 
+    # lists
+
+    def unmarshall_list_item(self, data: marshaller.JsonObjectT, /) -> lists.ListItem:
+        creator_id, creator_type = get_creator_info(data)
+        return lists.ListItem(
+            id=data["id"],
+            message=data.get("message"),  # TODO: or None?
+            note=data.get("note"),  # TODO: or None?
+            created_at=ciso8601.parse_datetime(data["createdAt"]),
+            creator_id=creator_id,
+            creator_type=creator_type,
+        )
+
+    # messages
+
     def unmarshall_message(self, data: marshaller.JsonObjectT, /) -> messages.Message:
-        creator_id, creator_type = _get_created_by(data)
+        creator_id, creator_type = get_creator_info(data)
         raw_updated_at = data.get("updatedAt")
         return messages.Message(
             id=uuid.UUID(data["id"]),
@@ -80,21 +97,12 @@ class Marshaller:
             updated_at=ciso8601.parse_datetime(raw_updated_at) if raw_updated_at else None,
         )
 
+    # reactions
+
     def unmarshall_content_reaction(self, data: marshaller.JsonObjectT, /) -> reactions.ContentReaction:
-        creator_id, creator_type = _get_created_by(data)
+        creator_id, creator_type = get_creator_info(data)
         return reactions.ContentReaction(
             id=data["id"],
-            created_at=ciso8601.parse_datetime(data["createdAt"]),
-            creator_id=creator_id,
-            creator_type=creator_type,
-        )
-
-    def unmarshall_list_item(self, data: marshaller.JsonObjectT, /) -> lists.ListItem:
-        creator_id, creator_type = _get_created_by(data)
-        return lists.ListItem(
-            id=data["id"],
-            message=data.get("message"),  # TODO: or None?
-            note=data.get("note"),  # TODO: or None?
             created_at=ciso8601.parse_datetime(data["createdAt"]),
             creator_id=creator_id,
             creator_type=creator_type,

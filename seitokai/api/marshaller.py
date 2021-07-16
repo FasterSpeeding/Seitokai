@@ -49,14 +49,22 @@ JsonIsh: typing.TypeAlias = str | int | float | bool | JsonArrayT | JsonObjectT
 class Marshaller(typing.Protocol):
     __slots__ = ()
 
+    # fourms
+
     def unmarshall_fourm_thread(self, data: JsonObjectT, /) -> forums.ForumThread:
         raise NotImplementedError
+
+    # lists
+
+    def unmarshall_list_item(self, data: JsonObjectT, /) -> lists.ListItem:
+        raise NotImplementedError
+
+    # messages
 
     def unmarshall_message(self, data: JsonObjectT, /) -> messages.Message:
         raise NotImplementedError
 
-    def unmarshall_content_reaction(self, data: JsonObjectT, /) -> reactions.ContentReaction:
-        raise NotImplementedError
+    # reactions
 
-    def unmarshall_list_item(self, data: JsonObjectT, /) -> lists.ListItem:
+    def unmarshall_content_reaction(self, data: JsonObjectT, /) -> reactions.ContentReaction:
         raise NotImplementedError

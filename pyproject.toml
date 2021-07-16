@@ -20,3 +20,5 @@ reportIncompatibleMethodOverride = "warning"  # This relies on ordering for key-
                                            # than it's worth
 reportUnknownMemberType = "warning"  # This messes with instance checking generic objects
 reportUnknownArgumentType = "warning"  # Pretty much the same as reportUnknownMemberType
+reportUnknownVariableType = "warning"  # Pretty much the same as reportUnknownMemberType
+reportUnknownParameterType = "warning"  # Pretty much the same as reportUnknownMemberType

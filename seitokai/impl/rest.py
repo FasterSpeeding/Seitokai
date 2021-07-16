@@ -31,8 +31,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-from seitokai.api import marshaller
-
 __all__: list[str] = ["RestClient"]
 
 import types
@@ -93,14 +91,26 @@ class RestClient:
         self._base_url = base_url
         self._client: httpx.AsyncClient | None = None
         self._marshaller = marshaller
-        self._token = token
+        self._token = f"Bearer {token}"
+
+    async def __aenter__(self) -> RestClient:
+        await self.start()
+        return self
+
+    async def __aexit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        exception_traceback: types.TracebackType | None,
+    ) -> None:
+        await self.close()
 
     @property
     def is_running(self) -> bool:
         return self._client is not None
 
     @classmethod
-    async def spawn(
+    def spawn(
         cls,
         token: str | None,
         /,
@@ -122,9 +132,7 @@ class RestClient:
 
             marshaller = marshaller_impl.Marshaller()
 
-        client = cls(token, marshaller=marshaller, base_url=base_url)
-        await client.start()
-        return client
+        return cls(token, marshaller=marshaller, base_url=base_url)
 
     async def start(
         self,
@@ -245,7 +253,7 @@ class RestClient:
 
     # Chat
 
-    def _build_message(self, content: str) -> marshaller_.JsonObjectT:
+    def _build_message(self, content: str, /) -> marshaller_.JsonObjectT:
         return {"content": content}
 
     async def post_channel_message(self, channel_id: UuidIsh, /, content: str) -> messages.Message:
@@ -296,5 +304,5 @@ class RestClient:
         return result
 
     async def post_role_xp(self, role_id: UuidIsh, /, amount: int) -> None:
-        payload: marshaller.JsonObjectT = {"amount": amount}
+        payload: marshaller_.JsonObjectT = {"amount": amount}
         await self.post(f"/roles/{role_id}/xp", json=payload)
