@@ -55,23 +55,22 @@ class Listener(typing.Generic[_IdentifierT, _T]):
     callback: collections.Callable[[_T], collections.Coroutine[typing.Any, typing.Any, None]] = dataclasses.field(
         compare=True, hash=True
     )
-    _task_group: anyio_abc.TaskGroup | None = dataclasses.field(compare=False, default=None, hash=False, init=False)
+    _cancel_scope: anyio_abc.CancelScope | None = dataclasses.field(compare=False, default=None, hash=False, init=False)
 
-    async def _stream(self, stream: dispatch.Stream[_T], task_group: anyio_abc.TaskGroup) -> None:
-        with stream:
+    async def _stream(
+        self, stream: dispatch.Stream[_T], cancel_scope: anyio.CancelScope, task_group: anyio_abc.TaskGroup
+    ) -> None:
+        with (cancel_scope, stream):
             async for event in stream:
                 task_group.start_soon(self.callback, event)
 
-    async def activate(self, stream: dispatch.Stream[_T]) -> None:
-        self._task_group = anyio.create_task_group()
-        await self._task_group.__aenter__()
-        self._task_group.start_soon(self._stream, stream, self._task_group)
+    def activate(self, stream: dispatch.Stream[_T], task_group: anyio_abc.TaskGroup) -> None:
+        self._cancel_scope = anyio.CancelScope()
+        task_group.start_soon(self._stream, stream, self._cancel_scope, task_group)
 
-    async def deactivate(self):
-        if not self._task_group:
+    def deactivate(self):
+        if not self._cancel_scope:
             raise RuntimeError("Listener isn't active")
 
-        self._task_group.cancel_scope.cancel()
-        task_group = self._task_group
-        self._task_group = None
-        await task_group.__aexit__(None, None, None)
+        self._cancel_scope.cancel()
+        self._cancel_scope = None

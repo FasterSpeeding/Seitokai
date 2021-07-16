@@ -31,13 +31,30 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = []
+__all__: list[str] = ["Paginator"]
 
 import typing
 
+if typing.TYPE_CHECKING:
+    from collections import abc as collections
+
+
 ValueT_co = typing.TypeVar("ValueT_co", covariant=True)
+_T = typing.TypeVar("_T")
 
 
 @typing.runtime_checkable
 class Paginator(typing.Protocol[ValueT_co]):
     __slots__ = ()
+
+    def __aiter__(self: _T) -> _T:
+        raise NotImplementedError
+
+    async def __anext__(self) -> ValueT_co:
+        raise NotImplementedError
+
+    async def collect(self) -> collections.Sequence[ValueT_co]:
+        raise NotImplementedError
+
+    def limit(self, count: int, /) -> int:
+        raise NotImplementedError
