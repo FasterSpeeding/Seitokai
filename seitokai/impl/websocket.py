@@ -51,7 +51,7 @@ if typing.TYPE_CHECKING:
 
     from anyio import abc as anyio_abc
 
-    from ..api import gateway as gateway_api
+    from ..api import websocket as websocket_api
 
     _WebsocketClientT = typing.TypeVar("_WebsocketClientT", bound="WebsocketClient")
 
@@ -70,28 +70,24 @@ class _Disconnect(Exception):
 class WebsocketClient:
     __slots__: tuple[str, ...] = (
         "_client",
+        "_event_manager",
         "_join_event",
         "_last_message_id",
         "_raw_dispatchers",
-        "_task_group",
         "_token",
         "_url",
     )
 
-    def __init__(self, token: str, /, *, url: str = DEFAULT_URL) -> None:
+    def __init__(
+        self, token: str, /, event_manager: event_manager_api.EventManager | None = None, *, url: str | None = None
+    ) -> None:
         self._client: asyncwebsockets.Websocket | None = None
+        self._event_manager = event_manager
         self._join_event: anyio.Event | None = None
         self._last_message_id: str | None = None
         self._raw_dispatchers: dict[str, event_manager_impl.Dispatchable[event_manager_api.RawEventT]] = {}
-        self._task_group: anyio_abc.TaskGroup | None = None
         self._token = f"Bearer {token}"
-        self._url = url
-
-    def _get_task_group(self) -> anyio_abc.TaskGroup:
-        if self._task_group:
-            return self._task_group
-
-        raise RuntimeError("Websocket client is inactive")
+        self._url = url or DEFAULT_URL
 
     def _get_ws(self) -> asyncwebsockets.Websocket:
         if self._client:
@@ -111,9 +107,10 @@ class WebsocketClient:
 
     async def _heartbeat(self, ws: asyncwebsockets.Websocket, delay: float, cancel: anyio.CancelScope) -> None:
         with cancel:
-            _LOGGER.debug("Sending heartbeat ping")
-            await self._send_raw_event(ws, _PING)
-            await anyio.sleep(delay)
+            while True:
+                _LOGGER.debug("Sending heartbeat ping")
+                await self._send_raw_event(ws, _PING)
+                await anyio.sleep(delay)
 
     async def _keep_alive(self, ws: asyncwebsockets.Websocket, task_group: anyio_abc.TaskGroup) -> None:
         cancel_heartbeat = anyio.CancelScope()
@@ -189,8 +186,14 @@ class WebsocketClient:
 
         opcode = payload.get("op")
 
-        if opcode == 0 and (dispatcher := self._raw_dispatchers.get(payload["t"])):
-            dispatcher.dispatch(task_group, types.MappingProxyType(payload))
+        if opcode == 0:
+            event_name = payload["t"]
+            data = payload["d"]
+            if dispatcher := self._raw_dispatchers.get(event_name):
+                dispatcher.dispatch(task_group, types.MappingProxyType(data))
+
+            if self._event_manager:
+                self._event_manager.dispatch_raw(event_name, data)
 
         else:
             _LOGGER.warning("Ignoring unexpected opcode %s for event payload %r", payload, message)
@@ -207,22 +210,19 @@ class WebsocketClient:
         self._client = client = await asyncwebsockets.create_websocket(
             self._url, ssl=ssl_context, headers=[(_AUTHORIZATION_HEADER_KEY, self._token)]
         )
-        self._task_group = task_group = anyio.create_task_group()
-        async with task_group:
+        self._join_event = anyio.Event()
+        async with anyio.create_task_group() as task_group:
             await self._keep_alive(client, task_group)
 
             if self._join_event:
                 self._join_event.set()
 
             task_group.cancel_scope.cancel()
-            self._task_group = None
+            self._join_event = None
 
     async def join(self) -> None:
-        if not self._client:
-            raise RuntimeError("Websocket client isn't running")
-
         if not self._join_event:
-            self._join_event = anyio.Event()
+            raise RuntimeError("Websocket client isn't running")
 
         await self._join_event.wait()
 
@@ -242,21 +242,27 @@ class WebsocketClient:
         return self._get_or_create_dispatchable(event_name).stream_abstract(buffer_size=buffer_size)
 
     def add_raw_listener(
-        self: _WebsocketClientT, event_name: str, callback: gateway_api.CallbackSig, /
+        self: _WebsocketClientT, event_name: str, callback: websocket_api.CallbackSig, /
     ) -> _WebsocketClientT:
         self._get_or_create_dispatchable(event_name).add_callback(callback)
         return self
 
+    def get_raw_listeners(self, event_name: str, /) -> collections.Sequence[websocket_api.CallbackSig]:
+        if dispatcher := self._raw_dispatchers.get(event_name):
+            return dispatcher.get_callbacks()
+
+        return ()
+
     def with_raw_listener(
         self, event_name: str, /
-    ) -> collections.Callable[[gateway_api.CallbackSigT], gateway_api.CallbackSigT]:
-        def decorator(callback: gateway_api.CallbackSigT, /) -> gateway_api.CallbackSigT:
+    ) -> collections.Callable[[websocket_api.CallbackSigT], websocket_api.CallbackSigT]:
+        def decorator(callback: websocket_api.CallbackSigT, /) -> websocket_api.CallbackSigT:
             self.add_raw_listener(event_name, callback)
             return callback
 
         return decorator
 
-    def remove_raw_listener(self, event_name: str, callback: gateway_api.CallbackSig, /) -> None:
+    def remove_raw_listener(self, event_name: str, callback: websocket_api.CallbackSig, /) -> None:
         dispatcher = self._raw_dispatchers[event_name]
         dispatcher.remove_callback(callback)
         if dispatcher.is_empty:

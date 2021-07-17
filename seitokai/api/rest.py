@@ -31,7 +31,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["RestClient"]
+__all__: list[str] = ["RestClient", "UuidIsh"]
 
 import typing
 import uuid
@@ -42,7 +42,7 @@ if typing.TYPE_CHECKING:
     from . import paginator
 
 
-UUIDish: typing.TypeAlias = str | uuid.UUID
+UuidIsh: typing.TypeAlias = str | uuid.UUID
 
 
 @typing.runtime_checkable
@@ -71,40 +71,40 @@ class RestClient(typing.Protocol):
 
     # Forums
 
-    async def post_channel_forum(self, channel_id: UUIDish, /, *, title: str, content: str) -> forums.ForumThread:
+    async def post_channel_forum(self, channel_id: UuidIsh, /, *, title: str, content: str) -> forums.ForumThread:
         raise NotImplementedError
 
     # Chat
 
-    async def post_channel_message(self, channel_id: UUIDish, /, content: str) -> messages.Message:
+    async def post_channel_message(self, channel_id: UuidIsh, /, content: str) -> messages.Message:
         raise NotImplementedError
 
-    async def iter_channel_messages(self, channel_id: UUIDish, /) -> paginator.Paginator[messages.Message]:
+    async def iter_channel_messages(self, channel_id: UuidIsh, /) -> paginator.Paginator[messages.Message]:
         raise NotImplementedError
 
-    async def get_channel_message(self, channel_id: UUIDish, message_id: UUIDish, /) -> messages.Message:
+    async def get_channel_message(self, channel_id: UuidIsh, message_id: UuidIsh, /) -> messages.Message:
         raise NotImplementedError
 
-    async def put_channel_message(self, channel_id: UUIDish, message_id: UUIDish, /, content: str) -> messages.Message:
+    async def put_channel_message(self, channel_id: UuidIsh, message_id: UuidIsh, /, content: str) -> messages.Message:
         raise NotImplementedError
 
-    async def delete_channel_message(self, channel_id: UUIDish, message_id: UUIDish, /) -> None:
+    async def delete_channel_message(self, channel_id: UuidIsh, message_id: UuidIsh, /) -> None:
         raise NotImplementedError
 
     # Reactions
 
-    async def put_content_reaction(self, channel_id: UUIDish, content_id: UUIDish, emote_id: int, /) -> None:
+    async def put_content_reaction(self, channel_id: UuidIsh, content_id: UuidIsh, emote_id: int, /) -> None:
         raise NotImplementedError
 
     # List items
 
-    async def post_channel_list(self, channel_id: UUIDish, /, message: str, *, note: str = ...) -> ...:
+    async def post_channel_list(self, channel_id: UuidIsh, /, message: str, *, note: str = ...) -> ...:
         raise NotImplementedError
 
     # Team XP
 
-    async def post_member_xp(self, user_id: UUIDish, /, amount: int) -> int:
+    async def post_member_xp(self, user_id: UuidIsh, /, amount: int) -> int:
         raise NotImplementedError
 
-    async def post_role_xp(self, role_id: UUIDish, /, amount: int) -> None:
+    async def post_role_xp(self, role_id: UuidIsh, /, amount: int) -> None:
         raise NotImplementedError

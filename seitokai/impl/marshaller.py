@@ -48,7 +48,7 @@ if typing.TYPE_CHECKING:
     from ..api import marshaller as marshaller_api
 
 
-def get_creator_info(data: marshaller_api.JsonObjectT, /) -> tuple[str, users.CreatorType]:
+def _get_creator_info(data: marshaller_api.JsonObjectT, /) -> tuple[str, users.CreatorType]:
     if webhook_id := data.get("createdByWebhookId"):
         return (webhook_id, users.CreatorType.WEBHOOK)
 
@@ -64,7 +64,7 @@ class Marshaller:
     # fourms
 
     def unmarshall_fourm_thread(self, data: marshaller_api.JsonObjectT, /) -> forums.ForumThread:
-        creator_id, creator_type = get_creator_info(data)
+        creator_id, creator_type = _get_creator_info(data)
         return forums.ForumThread(
             id=data["id"],
             created_at=ciso8601.parse_datetime(data["createdAt"]),
@@ -75,7 +75,7 @@ class Marshaller:
     # lists
 
     def unmarshall_list_item(self, data: marshaller_api.JsonObjectT, /) -> lists.ListItem:
-        creator_id, creator_type = get_creator_info(data)
+        creator_id, creator_type = _get_creator_info(data)
         return lists.ListItem(
             id=data["id"],
             message=data.get("message"),  # TODO: or None?
@@ -88,7 +88,7 @@ class Marshaller:
     # messages
 
     def unmarshall_message(self, data: marshaller_api.JsonObjectT, /) -> messages.Message:
-        creator_id, creator_type = get_creator_info(data)
+        creator_id, creator_type = _get_creator_info(data)
         raw_updated_at = data.get("updatedAt")
         return messages.Message(
             id=uuid.UUID(data["id"]),
@@ -103,7 +103,7 @@ class Marshaller:
     # reactions
 
     def unmarshall_content_reaction(self, data: marshaller_api.JsonObjectT, /) -> reactions.ContentReaction:
-        creator_id, creator_type = get_creator_info(data)
+        creator_id, creator_type = _get_creator_info(data)
         return reactions.ContentReaction(
             id=data["id"],
             created_at=ciso8601.parse_datetime(data["createdAt"]),

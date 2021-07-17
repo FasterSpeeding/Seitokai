@@ -31,18 +31,30 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = [
-    "BaseEvent",
-    "MessageEvent",
-    "MessageCreatedEvent",
-    "MessageUpdatedEvent",
-    "MessageDeletedEvent",
-    "TeamXpAddedEvent",
-]
+__all__: list[str] = ["CallbackSig", "CallbackSigT", "WebsocketClient"]
 
-from ._bases import BaseEvent
-from ._messages import MessageCreatedEvent
-from ._messages import MessageDeletedEvent
-from ._messages import MessageEvent
-from ._messages import MessageUpdatedEvent
-from ._xp import TeamXpAddedEvent
+import typing
+from collections import abc as collections
+
+from . import event_manager
+
+_T = typing.TypeVar("_T")
+CallbackSig: typing.TypeAlias = event_manager.CallbackSig[event_manager.RawEventT]
+CallbackSigT = typing.TypeVar("CallbackSigT", bound=CallbackSig)
+
+
+@typing.runtime_checkable
+class WebsocketClient(typing.Protocol):
+    __slots__ = ()
+
+    def stream(self, name: str, /) -> event_manager.Stream[event_manager.RawEventT]:
+        raise NotImplementedError
+
+    def add_raw_listener(self: _T, event_name: str, callback: CallbackSig, /) -> _T:
+        raise NotImplementedError
+
+    def with_raw_listener(self, name: str, /) -> collections.Callable[[CallbackSigT], CallbackSigT]:
+        raise NotImplementedError
+
+    def remove_raw_listener(self, event_name: str, callback: CallbackSig, /) -> None:
+        raise NotImplementedError

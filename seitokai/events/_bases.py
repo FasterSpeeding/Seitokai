@@ -33,6 +33,8 @@ from __future__ import annotations
 
 __all__: list[str] = ["BaseEvent"]
 
+import abc
 
-class BaseEvent:
+
+class BaseEvent(abc.ABC):
     __slots__: tuple[str, ...] = ()

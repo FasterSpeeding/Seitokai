@@ -31,13 +31,17 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["Dispatchable"]
+__all__: list[str] = ["as_listener", "BaseEventManager", "Dispatchable", "EventManager"]
 
 import dataclasses
 import inspect
 import typing
+import uuid
 
 import anyio
+import ciso8601
+
+from .. import events
 
 if typing.TYPE_CHECKING:
     from collections import abc as collections
@@ -47,9 +51,8 @@ if typing.TYPE_CHECKING:
 
     from ..api import event_manager as event_manager_api
     from ..api import marshaller as marshaler_api
-    from ..events import base_events
 
-    _EventManagerT = typing.TypeVar("_EventManagerT", bound="EventManager")
+    _EventManagerT = typing.TypeVar("_EventManagerT", bound="BaseEventManager")
 
 _T = typing.TypeVar("_T")
 
@@ -65,6 +68,9 @@ class Dispatchable(typing.Generic[_T]):
 
     def add_callback(self, callback: event_manager_api.CallbackSig[_T], /) -> None:
         self._callbacks.append(callback)
+
+    def get_callbacks(self) -> collections.Sequence[event_manager_api.CallbackSig[_T]]:
+        return self._callbacks.copy()
 
     def remove_callback(self, callback: event_manager_api.CallbackSig[_T], /) -> None:
         self._callbacks.remove(callback)
@@ -94,10 +100,11 @@ class Dispatchable(typing.Generic[_T]):
             task_group.start_soon(callback, value)
 
 
-def as_listener(
-    event_name: str, /
-) -> collections.Callable[[event_manager_api.EventCallbackSigT], event_manager_api.EventCallbackSigT]:
-    def decorator(callback: event_manager_api.EventCallbackSigT, /) -> event_manager_api.EventCallbackSigT:
+_CallbackT = typing.TypeVar("_CallbackT", bound="collections.Callable[..., events.BaseEvent]")
+
+
+def as_listener(event_name: str, /) -> collections.Callable[[_CallbackT], _CallbackT]:
+    def decorator(callback: _CallbackT, /) -> _CallbackT:
         callback.__event_name__ = event_name  # type: ignore
         assert isinstance(callback, _ListenerProto), "Wrong attributes set for listener proto"
         return callback  # type: ignore
@@ -109,27 +116,33 @@ def as_listener(
 class _ListenerProto(typing.Protocol):
     __slots__ = ()
 
-    def __call__(self) -> event_manager_api.EventCallbackSig:
-        raise NotImplementedError
+    __call__: collections.Callable[[event_manager_api.RawEventT], events.BaseEvent]
 
     @property
     def __event_name__(self) -> str:
         raise NotImplementedError
 
 
-@dataclasses.dataclass(slots=True)
-class EventManager:
-    marshaller: marshaler_api.Marshaller
-    _dispatchers: dict[type[base_events.BaseEvent], Dispatchable[typing.Any]] = dataclasses.field(
-        default_factory=dict, init=False
-    )
-    _listeners: dict[str, _ListenerProto] = dataclasses.field(default_factory=dict, init=False)
-    _task_group: anyio_abc.TaskGroup | None = dataclasses.field(default=None, init=False)
+# @dataclasses.dataclass(slots=True)  # Right now this breaks inspect.getmembers
+class BaseEventManager:
+    __slots__: tuple[str, ...] = ("_dispatchers", "_raw_listeners", "_task_group")
 
-    def __attrs_post_init__(self) -> None:
+    # _dispatchers: dict[type[events.BaseEvent], Dispatchable[typing.Any]] = dataclasses.field(
+    #     default_factory=dict, init=False
+    # )
+    # _raw_listeners: dict[str, _ListenerProto] = dataclasses.field(default_factory=dict, init=False)
+    # _task_group: anyio_abc.TaskGroup | None = dataclasses.field(default=None, init=False)
+
+    def __init__(self) -> None:
+        self._dispatchers: dict[type[events.BaseEvent], Dispatchable[typing.Any]] = {}
+        self._raw_listeners: dict[str, _ListenerProto] = {}
+        self._task_group: anyio_abc.TaskGroup | None = None
+        self.__post_init__()
+
+    def __post_init__(self) -> None:
         for _, member in inspect.getmembers(self):
             if isinstance(member, _ListenerProto):
-                self._listeners[member.__event_name__] = member
+                self._raw_listeners[member.__event_name__] = member
 
     def _get_or_create_dispatchable(
         self, event_type: type[event_manager_api.EventT]
@@ -141,12 +154,31 @@ class EventManager:
             dispatcher = self._dispatchers[event_type] = Dispatchable()
             return dispatcher
 
-    def dispatch(self, event: base_events.BaseEvent, /) -> None:
-        if not self._task_group:
-            raise RuntimeError("Event manager isn't active")
+    def close(self) -> None:
+        self.get_task_group().cancel_scope.cancel()
 
+    async def run(self) -> None:
+        if self._task_group:
+            raise RuntimeError("Already running")
+
+        self._task_group = anyio.create_task_group()
+        async with self._task_group:
+            await anyio.sleep_forever()
+
+    def get_task_group(self) -> anyio_abc.TaskGroup:
+        if self._task_group:
+            return self._task_group
+
+        raise RuntimeError("Event manager isn't active")
+
+    def dispatch(self, event: events.BaseEvent, /) -> None:
         if dispatcher := self._dispatchers.get(type(event)):
-            dispatcher.dispatch(self._task_group, event)
+            dispatcher.dispatch(self.get_task_group(), event)
+
+    def dispatch_raw(self, event_name: str, payload: event_manager_api.RawEventT, /) -> None:
+        if listener := self._raw_listeners.get(event_name):
+            if result := listener(payload):
+                self.dispatch(result)
 
     def stream(
         self, event_type: type[event_manager_api.EventT], /, *, buffer_size: int = 100
@@ -163,9 +195,14 @@ class EventManager:
         return self
 
     def with_listener(
-        self, event_type: type[base_events.BaseEvent], /
-    ) -> collections.Callable[[event_manager_api.EventCallbackSigT], event_manager_api.EventCallbackSigT]:
-        def decorator(callback: event_manager_api.EventCallbackSigT, /) -> event_manager_api.EventCallbackSigT:
+        self, event_type: type[events.BaseEvent], /
+    ) -> collections.Callable[
+        [event_manager_api.CallbackSig[event_manager_api.EventT]],
+        event_manager_api.CallbackSig[event_manager_api.EventT],
+    ]:
+        def decorator(
+            callback: event_manager_api.CallbackSig[event_manager_api.EventT], /
+        ) -> event_manager_api.CallbackSig[event_manager_api.EventT]:
             self.add_listener(event_type, callback)
             return callback
 
@@ -181,3 +218,35 @@ class EventManager:
         dispatcher.remove_callback(callback)
         if dispatcher.is_empty:
             del self._dispatchers[event_type]
+
+
+# @dataclasses.dataclass(slots=True)  # This messes with inspect.getmembers
+class EventManager(BaseEventManager):
+    __slots__: tuple[str, ...] = ("_marshaller",)
+
+    def __init__(self, marshaller: marshaler_api.Marshaller, /) -> None:
+        super().__init__()
+        self._marshaller = marshaller
+
+    @as_listener("ChatMessageCreated")
+    def process_chat_message_created(self, payload: event_manager_api.RawEventT, /) -> events.BaseEvent:
+        return events.MessageCreatedEvent(message=self._marshaller.unmarshall_message(payload["message"]))
+
+    @as_listener("ChatMessageUpdated")
+    def process_chat_message_updated(self, payload: event_manager_api.RawEventT, /) -> events.BaseEvent:
+        return events.MessageUpdatedEvent(message=self._marshaller.unmarshall_message(payload["message"]))
+
+    @as_listener("ChatMessageDeleted")
+    def process_chat_message_deleted(self, payload: event_manager_api.RawEventT, /) -> events.BaseEvent:
+        payload = payload["message"]
+        return events.MessageDeletedEvent(
+            _message_id=uuid.UUID(payload["id"]),
+            _channel_id=uuid.UUID(payload["channelId"]),
+            deleted_at=ciso8601.parse_datetime(payload["deletedAt"]),
+        )
+
+    @as_listener("TeamXpAdded")
+    def process_team_xp_added(self, payload: event_manager_api.RawEventT, /) -> events.BaseEvent:
+        return events.TeamXpAddedEvent(
+            user_ids=tuple(uuid.UUID(uid) for uid in payload["userIds"]), amount=payload["amount"]
+        )

@@ -31,11 +31,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["RestClient"]
+__all__: list[str] = ["RestClient", "STANDARD_URL"]
 
 import types
 import typing
-import uuid
 
 import httpx
 
@@ -47,12 +46,12 @@ if typing.TYPE_CHECKING:
     from .. import messages
     from ..api import marshaller as marshaller_api
     from ..api import paginator as paginator_api
+    from ..api import rest as rest_api
 
     _JsonObjectT_inv = typing.TypeVar("_JsonObjectT_inv", bound=marshaller_api.JsonObjectT)
 
 _ValueT = typing.TypeVar("_ValueT")
 
-UuidIsh: typing.TypeAlias = str | uuid.UUID
 UndefinedOr: typing.TypeAlias = types.EllipsisType | _ValueT
 UndefinedNoneOr: typing.TypeAlias = types.EllipsisType | None | _ValueT
 
@@ -88,15 +87,15 @@ class RestClient:
         /,
         marshaller: marshaller_api.Marshaller,
         *,
-        base_url: str = STANDARD_URL,
+        base_url: str | None = None,
     ) -> None:
-        self._base_url = base_url
+        self._base_url = base_url or STANDARD_URL
         self._client: httpx.AsyncClient | None = None
         self._marshaller = marshaller
         self._token = f"Bearer {token}"
 
     async def __aenter__(self) -> RestClient:
-        await self.start()
+        self.start()
         return self
 
     async def __aexit__(
@@ -136,7 +135,7 @@ class RestClient:
 
         return cls(token, marshaller=marshaller, base_url=base_url)
 
-    async def start(
+    def start(
         self,
         verify: str | bool | ssl.SSLContext = True,
         # cert: str | tuple[str, str | None] | tuple[str, str | None, str | None] | None = None,
@@ -247,7 +246,9 @@ class RestClient:
 
     # Forums
 
-    async def post_channel_forum(self, channel_id: UuidIsh, /, *, title: str, content: str) -> forums.ForumThread:
+    async def post_channel_forum(
+        self, channel_id: rest_api.UuidIsh, /, *, title: str, content: str
+    ) -> forums.ForumThread:
         payload: marshaller_api.JsonObjectT = {"title": title, "content": content}
         response = await self.post(f"/channels/{channel_id}/forum", json=payload)
         assert isinstance(response, dict)
@@ -258,37 +259,45 @@ class RestClient:
     def _build_message(self, content: str, /) -> marshaller_api.JsonObjectT:
         return {"content": content}
 
-    async def post_channel_message(self, channel_id: UuidIsh, /, content: str) -> messages.Message:
+    async def post_channel_message(self, channel_id: rest_api.UuidIsh, /, content: str) -> messages.Message:
         payload = self._build_message(content)
         response = await self.post(f"/channels/{channel_id}/messages", json=payload)
         assert isinstance(response, dict)
         return self._marshaller.unmarshall_message(response["message"])
 
-    async def iter_channel_messages(self, channel_id: UuidIsh, /) -> paginator_api.Paginator[messages.Message]:
+    async def iter_channel_messages(self, channel_id: rest_api.UuidIsh, /) -> paginator_api.Paginator[messages.Message]:
         raise NotImplementedError
 
-    async def get_channel_message(self, channel_id: UuidIsh, message_id: UuidIsh, /) -> messages.Message:
+    async def get_channel_message(
+        self, channel_id: rest_api.UuidIsh, message_id: rest_api.UuidIsh, /
+    ) -> messages.Message:
         response = await self.get(f"/channels/{channel_id}/messages/{message_id}")
         assert isinstance(response, dict)
         return self._marshaller.unmarshall_message(response["message"])
 
-    async def put_channel_message(self, channel_id: UuidIsh, message_id: UuidIsh, /, content: str) -> messages.Message:
+    async def put_channel_message(
+        self, channel_id: rest_api.UuidIsh, message_id: rest_api.UuidIsh, /, content: str
+    ) -> messages.Message:
         payload = self._build_message(content)
         response = await self.put(f"/channels/{channel_id}/messages/{message_id}", json=payload)
         assert isinstance(response, dict)
         return self._marshaller.unmarshall_message(response["message"])
 
-    async def delete_channel_message(self, channel_id: UuidIsh, message_id: UuidIsh, /) -> None:
+    async def delete_channel_message(self, channel_id: rest_api.UuidIsh, message_id: rest_api.UuidIsh, /) -> None:
         await self.delete(f"/channels/{channel_id}/messages/{message_id}")
 
     # Reactions
 
-    async def put_content_reaction(self, channel_id: UuidIsh, content_id: UuidIsh, emote_id: int, /) -> None:
+    async def put_content_reaction(
+        self, channel_id: rest_api.UuidIsh, content_id: rest_api.UuidIsh, emote_id: int, /
+    ) -> None:
         await self.put(f"/channels/{channel_id}/content/{channel_id}/emotes/{emote_id}")
 
     # List items
 
-    async def post_channel_list(self, channel_id: UuidIsh, /, message: str, *, note: UndefinedOr[str] = ...) -> ...:
+    async def post_channel_list(
+        self, channel_id: rest_api.UuidIsh, /, message: str, *, note: UndefinedOr[str] = ...
+    ) -> ...:
         payload: marshaller_api.JsonObjectT = {"message": message}
         _put_undefined(payload, "note", note)
         response = await self.post(f"/channels/{channel_id}/list", json=payload)
@@ -297,7 +306,7 @@ class RestClient:
 
     # Team XP
 
-    async def post_member_xp(self, user_id: UuidIsh, /, amount: int) -> int:
+    async def post_member_xp(self, user_id: rest_api.UuidIsh, /, amount: int) -> int:
         payload: marshaller_api.JsonObjectT = {"amount": amount}
         response = await self.post(f"/members/{user_id}/xp", json=payload)
         assert isinstance(response, dict)
@@ -305,6 +314,6 @@ class RestClient:
         assert isinstance(result, int)
         return result
 
-    async def post_role_xp(self, role_id: UuidIsh, /, amount: int) -> None:
+    async def post_role_xp(self, role_id: rest_api.UuidIsh, /, amount: int) -> None:
         payload: marshaller_api.JsonObjectT = {"amount": amount}
         await self.post(f"/roles/{role_id}/xp", json=payload)
