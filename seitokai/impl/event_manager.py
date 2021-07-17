@@ -35,6 +35,7 @@ __all__: list[str] = ["as_listener", "BaseEventManager", "Dispatchable", "EventM
 
 import dataclasses
 import inspect
+import logging
 import typing
 import uuid
 
@@ -55,6 +56,20 @@ if typing.TYPE_CHECKING:
     _EventManagerT = typing.TypeVar("_EventManagerT", bound="BaseEventManager")
 
 _T = typing.TypeVar("_T")
+_LOGGER: typing.Final[logging.Logger] = logging.getLogger("seitokai.event_manager")
+
+
+async def _catch_exception(
+    _callback: typing.Callable[..., typing.Awaitable[None]],
+    /,
+    *args: typing.Any,
+    **kwargs: typing.Any,
+) -> None:
+    try:
+        await _callback(*args, **kwargs)
+
+    except Exception as exc:
+        _LOGGER.exception("Dispatch raised exception", exc_info=exc)
 
 
 @dataclasses.dataclass(slots=True)
@@ -97,7 +112,7 @@ class Dispatchable(typing.Generic[_T]):
                 pass
 
         for callback in self._callbacks:
-            task_group.start_soon(callback, value)
+            task_group.start_soon(_catch_exception, callback, value)
 
 
 _CallbackT = typing.TypeVar("_CallbackT", bound="collections.Callable[..., events.BaseEvent]")
@@ -154,8 +169,14 @@ class BaseEventManager:
             dispatcher = self._dispatchers[event_type] = Dispatchable()
             return dispatcher
 
+    def _get_task_group(self) -> anyio_abc.TaskGroup:
+        if self._task_group:
+            return self._task_group
+
+        raise RuntimeError("Event manager isn't active")
+
     def close(self) -> None:
-        self.get_task_group().cancel_scope.cancel()
+        self._get_task_group().cancel_scope.cancel()
 
     async def run(self) -> None:
         if self._task_group:
@@ -165,20 +186,24 @@ class BaseEventManager:
         async with self._task_group:
             await anyio.sleep_forever()
 
-    def get_task_group(self) -> anyio_abc.TaskGroup:
-        if self._task_group:
-            return self._task_group
-
-        raise RuntimeError("Event manager isn't active")
-
     def dispatch(self, event: events.BaseEvent, /) -> None:
         if dispatcher := self._dispatchers.get(type(event)):
-            dispatcher.dispatch(self.get_task_group(), event)
+            dispatcher.dispatch(self._get_task_group(), event)
 
     def dispatch_raw(self, event_name: str, payload: event_manager_api.RawEventT, /) -> None:
         if listener := self._raw_listeners.get(event_name):
-            if result := listener(payload):
-                self.dispatch(result)
+            try:
+                result = listener(payload)
+
+            except Exception as exc:
+                _LOGGER.exception(f"Failed to deserialize {event_name} event", exc_info=exc)
+
+            else:
+                if result:
+                    self.dispatch(result)
+
+        else:
+            _LOGGER.debug(f"Ignoring {event_name} event with no raw listener")
 
     def stream(
         self, event_type: type[event_manager_api.EventT], /, *, buffer_size: int = 100
