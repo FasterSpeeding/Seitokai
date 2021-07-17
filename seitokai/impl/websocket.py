@@ -43,6 +43,7 @@ import asyncwebsockets  # type: ignore
 import wsproto
 
 from ..api import event_manager as event_manager_api
+from ..api import websocket as websocket_api
 from . import event_manager as event_manager_impl
 
 if typing.TYPE_CHECKING:
@@ -50,8 +51,6 @@ if typing.TYPE_CHECKING:
     from collections import abc as collections
 
     from anyio import abc as anyio_abc
-
-    from ..api import websocket as websocket_api
 
     _WebsocketClientT = typing.TypeVar("_WebsocketClientT", bound="WebSocketClient")
 
@@ -67,7 +66,7 @@ class _Disconnect(Exception):
     __slots__: tuple[str, ...] = ()
 
 
-class WebSocketClient:
+class WebSocketClient(websocket_api.WebSocketClient):
     __slots__: tuple[str, ...] = (
         "_client",
         "_event_manager",

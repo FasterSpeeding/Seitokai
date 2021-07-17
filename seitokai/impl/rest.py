@@ -38,6 +38,8 @@ import typing
 
 import httpx
 
+from ..api import rest as rest_api
+
 if typing.TYPE_CHECKING:
     # import collections.abc as collections
     import ssl
@@ -46,7 +48,6 @@ if typing.TYPE_CHECKING:
     from .. import messages
     from ..api import marshaller as marshaller_api
     from ..api import paginator as paginator_api
-    from ..api import rest as rest_api
 
     _JsonObjectT_inv = typing.TypeVar("_JsonObjectT_inv", bound=marshaller_api.JsonObjectT)
 
@@ -78,7 +79,7 @@ _POST: typing.Final[str] = "POST"
 _PUT: typing.Final[str] = "PUT"
 
 
-class RestClient:
+class RestClient(rest_api.RestClient):
     __slots__: tuple[str, ...] = ("_base_url", "_client", "_marshaller", "_token")
 
     def __init__(

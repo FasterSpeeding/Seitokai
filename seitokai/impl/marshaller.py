@@ -33,7 +33,6 @@ from __future__ import annotations
 
 __all__: list[str] = ["Marshaller"]
 
-import typing
 import uuid
 
 import ciso8601
@@ -43,9 +42,7 @@ from .. import lists
 from .. import messages
 from .. import reactions
 from .. import users
-
-if typing.TYPE_CHECKING:
-    from ..api import marshaller as marshaller_api
+from ..api import marshaller as marshaller_api
 
 
 def _get_creator_info(data: marshaller_api.JsonObjectT, /) -> tuple[str, users.CreatorType]:
@@ -58,7 +55,7 @@ def _get_creator_info(data: marshaller_api.JsonObjectT, /) -> tuple[str, users.C
     return (data["createdBy"], users.CreatorType.USER)
 
 
-class Marshaller:
+class Marshaller(marshaller_api.Marshaller):
     __slots__: tuple[str, ...] = ()
 
     # fourms

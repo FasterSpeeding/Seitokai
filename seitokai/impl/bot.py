@@ -37,6 +37,8 @@ import typing
 
 import anyio
 
+from ..api import bot as bot_api
+from ..api import event_manager as event_manager_api
 from ..impl import event_manager as event_manager_impl
 from ..impl import marshaller as marshaler_impl
 from ..impl import rest as rest_impl
@@ -48,7 +50,6 @@ if typing.TYPE_CHECKING:
     from anyio import abc as anyio_abc
 
     from .. import events
-    from ..api import event_manager as event_manager_api
     from ..api import marshaller as marshaller_api
     from ..api import rest as rest_api
     from ..api import websocket as websocket_api
@@ -56,7 +57,7 @@ if typing.TYPE_CHECKING:
     _WebSocketBotT = typing.TypeVar("_WebSocketBotT", bound="WebSocketBot")
 
 
-class WebSocketBot:
+class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
     __slots__: tuple[str, ...] = (
         "_close_scope",
         "_event_manager",

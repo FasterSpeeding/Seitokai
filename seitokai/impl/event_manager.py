@@ -43,6 +43,7 @@ import anyio
 import ciso8601
 
 from .. import events
+from ..api import event_manager as event_manager_api
 
 if typing.TYPE_CHECKING:
     from collections import abc as collections
@@ -50,7 +51,6 @@ if typing.TYPE_CHECKING:
     import anyio.abc as anyio_abc
     from anyio.streams import memory as memory_streams
 
-    from ..api import event_manager as event_manager_api
     from ..api import marshaller as marshaler_api
 
     _EventManagerT = typing.TypeVar("_EventManagerT", bound="BaseEventManager")
@@ -139,7 +139,7 @@ class _ListenerProto(typing.Protocol):
 
 
 # @dataclasses.dataclass(slots=True)  # Right now this breaks inspect.getmembers
-class BaseEventManager:
+class BaseEventManager(event_manager_api.EventManager):
     __slots__: tuple[str, ...] = ("_dispatchers", "_raw_listeners", "_task_group")
 
     # _dispatchers: dict[type[events.BaseEvent], Dispatchable[typing.Any]] = dataclasses.field(
