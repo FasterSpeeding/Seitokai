@@ -74,7 +74,7 @@ class WebSocketBot:
         self._marshaller = marshaler_impl.Marshaller()
         self._event_manager = event_manager_impl.EventManager(self._marshaller)
         self._rest = rest_impl.RestClient(token, marshaller=self._marshaller, base_url=base_url)
-        self._websocket = websocket_impl.WebsocketClient(token, event_manager=self._event_manager, url=gateway_url)
+        self._websocket = websocket_impl.WebSocketClient(token, event_manager=self._event_manager, url=gateway_url)
 
     @property
     def event_manager(self) -> event_manager_api.EventManager:
@@ -89,7 +89,7 @@ class WebSocketBot:
         return self._rest
 
     @property
-    def websocket(self) -> websocket_api.WebsocketClient:
+    def websocket(self) -> websocket_api.WebSocketClient:
         return self._websocket
 
     async def join(self) -> None:

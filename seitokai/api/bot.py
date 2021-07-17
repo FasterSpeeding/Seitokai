@@ -51,7 +51,7 @@ class WebSocketBot(typing.Protocol):
         raise NotImplementedError
 
     @property
-    def gateway(self) -> websocket_api.WebsocketClient:
+    def gateway(self) -> websocket_api.WebSocketClient:
         raise NotImplementedError
 
     @property

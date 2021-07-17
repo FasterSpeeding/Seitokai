@@ -31,7 +31,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["RestClient", "STANDARD_URL"]
+__all__: list[str] = ["RestClient", "STANDARD_URL", "UndefinedOr", "UndefinedNoneOr"]
 
 import types
 import typing

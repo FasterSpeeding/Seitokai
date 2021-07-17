@@ -31,7 +31,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["WebsocketClient", "DEFAULT_URL"]
+__all__: list[str] = ["WebSocketClient", "DEFAULT_URL"]
 
 import json
 import logging
@@ -53,7 +53,7 @@ if typing.TYPE_CHECKING:
 
     from ..api import websocket as websocket_api
 
-    _WebsocketClientT = typing.TypeVar("_WebsocketClientT", bound="WebsocketClient")
+    _WebsocketClientT = typing.TypeVar("_WebsocketClientT", bound="WebSocketClient")
 
 
 _AUTHORIZATION_HEADER_KEY: typing.Final[str] = "Authorization"
@@ -67,7 +67,7 @@ class _Disconnect(Exception):
     __slots__: tuple[str, ...] = ()
 
 
-class WebsocketClient:
+class WebSocketClient:
     __slots__: tuple[str, ...] = (
         "_client",
         "_event_manager",

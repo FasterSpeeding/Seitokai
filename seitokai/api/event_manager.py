@@ -31,15 +31,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = [
-    "CallbackSig",
-    "EventT",
-    "EventCallbackSig",
-    "EventCallbackSigT",
-    "EventManager",
-    "RawEventT",
-    "Stream",
-]
+__all__: list[str] = ["CallbackSig", "EventT", "EventManager", "RawEventT", "Stream"]
 
 import typing
 from collections import abc as collections
@@ -53,8 +45,6 @@ _T = typing.TypeVar("_T")
 T_co = typing.TypeVar("T_co", covariant=True)
 RawEventT: typing.TypeAlias = collections.Mapping[str, typing.Any]
 CallbackSig: typing.TypeAlias = collections.Callable[[_T], collections.Coroutine[typing.Any, typing.Any, None]]
-EventCallbackSig = CallbackSig[events.BaseEvent]
-EventCallbackSigT = typing.TypeVar("EventCallbackSigT", bound=EventCallbackSig)
 EventT = typing.TypeVar("EventT", bound=events.BaseEvent)
 
 

@@ -31,7 +31,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = ["CallbackSig", "CallbackSigT", "WebsocketClient"]
+__all__: list[str] = ["CallbackSig", "CallbackSigT", "WebSocketClient"]
 
 import typing
 from collections import abc as collections
@@ -44,7 +44,7 @@ CallbackSigT = typing.TypeVar("CallbackSigT", bound=CallbackSig)
 
 
 @typing.runtime_checkable
-class WebsocketClient(typing.Protocol):
+class WebSocketClient(typing.Protocol):
     __slots__ = ()
 
     def stream(self, name: str, /) -> event_manager.Stream[event_manager.RawEventT]:

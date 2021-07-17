@@ -32,11 +32,14 @@
 from __future__ import annotations
 
 __all__: list[str] = [
+    # _bases.py
     "BaseEvent",
+    # _messages.py
     "MessageEvent",
     "MessageCreatedEvent",
     "MessageUpdatedEvent",
     "MessageDeletedEvent",
+    # _xp.py
     "TeamXpAddedEvent",
 ]
 

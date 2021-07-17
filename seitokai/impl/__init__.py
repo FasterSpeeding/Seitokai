@@ -30,3 +30,32 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
+
+__all__: list[str] = [
+    # bot.py
+    "bot",
+    "WebSocketBot",
+    # event_manager.py
+    "event_manager",
+    "EventManager",
+    # marshaller.py
+    "marshaller",
+    "Marshaller",
+    # rest.py
+    "rest",
+    "RestClient",
+    # websocket.py
+    "websocket",
+    "WebSocketClient",
+]
+
+from . import bot
+from . import event_manager
+from . import marshaller
+from . import rest
+from . import websocket
+from .bot import WebSocketBot
+from .event_manager import EventManager
+from .marshaller import Marshaller
+from .rest import RestClient
+from .websocket import WebSocketClient
