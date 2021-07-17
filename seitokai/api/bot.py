@@ -31,4 +31,33 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-__all__: list[str] = []
+__all__: list[str] = ["WebSocketBot"]
+
+import typing
+
+if typing.TYPE_CHECKING:
+    from . import event_manager as event_manager_api
+    from . import marshaller as marshaller_api
+    from . import rest as rest_api
+    from . import websocket as websocket_api
+
+
+@typing.runtime_checkable
+class WebSocketBot(typing.Protocol):
+    __slots__ = ()
+
+    @property
+    def event_manager(self) -> event_manager_api.EventManager:
+        raise NotImplementedError
+
+    @property
+    def gateway(self) -> websocket_api.WebsocketClient:
+        raise NotImplementedError
+
+    @property
+    def marshaller(self) -> marshaller_api.Marshaller:
+        raise NotImplementedError
+
+    @property
+    def rest(self) -> rest_api.RestClient:
+        raise NotImplementedError
