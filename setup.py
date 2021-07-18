@@ -1,7 +1,8 @@
 import os
 import re
-import setuptools
 import types
+
+import setuptools
 
 MAIN_MODULE_NAME = "seitokai"
 TARGET_PROJECT_NAME = "seitokai"
