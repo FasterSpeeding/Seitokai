@@ -159,6 +159,10 @@ class BaseEventManager(event_manager_api.EventManager):
             if isinstance(member, _ListenerProto):
                 self._raw_listeners[member.__event_name__] = member
 
+    @property
+    def is_running(self) -> bool:
+        return self._task_group is not None
+
     def _get_or_create_dispatchable(
         self, event_type: type[event_manager_api.EventT]
     ) -> Dispatchable[event_manager_api.EventT]:

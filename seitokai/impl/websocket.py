@@ -88,6 +88,10 @@ class WebSocketClient(websocket_api.WebSocketClient):
         self._token = f"Bearer {token}"
         self._url = url or DEFAULT_URL
 
+    @property
+    def is_running(self) -> bool:
+        return self._client is not None
+
     def _get_ws(self) -> asyncwebsockets.Websocket:
         if self._client:
             return self._client

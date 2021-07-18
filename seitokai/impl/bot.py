@@ -82,6 +82,10 @@ class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
         return self._event_manager
 
     @property
+    def is_running(self) -> bool:
+        return self._close_scope is not None
+
+    @property
     def marshaller(self) -> marshaller_api.Marshaller:
         return self._marshaller
 
