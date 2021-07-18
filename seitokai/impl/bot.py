@@ -68,14 +68,14 @@ class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
         "_websocket",
     )
 
-    def __init__(self, token: str, /, *, base_url: str | None = None, gateway_url: str | None = None) -> None:
+    def __init__(self, token: str, /, *, base_url: str | None = None, websocket_url: str | None = None) -> None:
         self._close_scope: anyio_abc.CancelScope | None = None
         self._is_closing = False
         self._join_event: anyio.Event | None = None
         self._marshaller = marshaler_impl.Marshaller()
         self._event_manager = event_manager_impl.EventManager(self._marshaller)
         self._rest = rest_impl.RestClient(token, marshaller=self._marshaller, base_url=base_url)
-        self._websocket = websocket_impl.WebSocketClient(token, event_manager=self._event_manager, url=gateway_url)
+        self._websocket = websocket_impl.WebSocketClient(token, event_manager=self._event_manager, url=websocket_url)
 
     @property
     def event_manager(self) -> event_manager_api.EventManager:

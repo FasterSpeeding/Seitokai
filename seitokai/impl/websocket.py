@@ -57,7 +57,7 @@ if typing.TYPE_CHECKING:
 
 _AUTHORIZATION_HEADER_KEY: typing.Final[str] = "Authorization"
 DEFAULT_URL: typing.Final[str] = "wss://api.guilded.gg/v1/websocket"
-_LOGGER: typing.Final[logging.Logger] = logging.getLogger("seitokai.gateway")
+_LOGGER: typing.Final[logging.Logger] = logging.getLogger("seitokai.websocket")
 _PING: typing.Final[wsproto.events.Ping] = wsproto.events.Ping()
 _PONG: typing.Final[wsproto.events.Pong] = wsproto.events.Pong()
 
