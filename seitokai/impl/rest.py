@@ -33,6 +33,7 @@ from __future__ import annotations
 
 __all__: list[str] = ["RestClient", "STANDARD_URL", "UndefinedOr", "UndefinedNoneOr"]
 
+import contextlib
 import types
 import typing
 
@@ -41,7 +42,7 @@ import httpx
 from ..api import rest as rest_api
 
 if typing.TYPE_CHECKING:
-    # import collections.abc as collections
+    import collections.abc as collections
     import ssl
 
     from .. import forums
@@ -50,6 +51,7 @@ if typing.TYPE_CHECKING:
     from ..api import paginator as paginator_api
 
     _JsonObjectT_inv = typing.TypeVar("_JsonObjectT_inv", bound=marshaller_api.JsonObjectT)
+    _RestClientT = typing.TypeVar("_RestClientT", bound="RestClient")
 
 _ValueT = typing.TypeVar("_ValueT")
 
@@ -95,24 +97,13 @@ class RestClient(rest_api.RestClient):
         self._marshaller = marshaller
         self._token = f"Bearer {token}"
 
-    async def __aenter__(self) -> RestClient:
-        self.start()
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: types.TracebackType | None,
-    ) -> None:
-        await self.close()
-
     @property
     def is_running(self) -> bool:
         return self._client is not None
 
     @classmethod
-    def spawn(
+    @contextlib.asynccontextmanager
+    async def spawn(
         cls,
         token: str | None,
         /,
@@ -128,16 +119,27 @@ class RestClient(rest_api.RestClient):
         limits: httpx.Limits = httpx.Limits(max_connections=100, max_keepalive_connections=20),
         max_redirects: int = 20,
         trust_env: bool = True,
-    ) -> RestClient:
+    ) -> collections.AsyncGenerator[RestClient, None]:
         if marshaller is None:
             from ..impl import marshaller as marshaller_impl
 
             marshaller = marshaller_impl.Marshaller()
 
-        return cls(token, marshaller=marshaller, base_url=base_url)
+        client = cls(token, marshaller=marshaller, base_url=base_url).start(
+            verify=verify,
+            http1=http1,
+            http2=http2,
+            timeout=timeout,
+            limits=limits,
+            max_redirects=max_redirects,
+            trust_env=trust_env,
+        )
+        yield client
+        await client.close()
 
     def start(
-        self,
+        self: _RestClientT,
+        *,
         verify: str | bool | ssl.SSLContext = True,
         # cert: str | tuple[str, str | None] | tuple[str, str | None, str | None] | None = None,
         http1: bool = True,
@@ -147,7 +149,7 @@ class RestClient(rest_api.RestClient):
         limits: httpx.Limits = httpx.Limits(max_connections=100, max_keepalive_connections=20),
         max_redirects: int = 20,
         trust_env: bool = True,
-    ) -> None:
+    ) -> _RestClientT:
         if self._client:
             raise RuntimeError("Client is already running")
 
@@ -163,6 +165,7 @@ class RestClient(rest_api.RestClient):
             max_redirects=max_redirects,
             trust_env=trust_env,
         )
+        return self
 
     async def close(self) -> None:
         if self._client is None:
