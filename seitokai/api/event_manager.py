@@ -33,6 +33,7 @@ from __future__ import annotations
 
 __all__: list[str] = ["CallbackSig", "EventT", "EventManager", "RawEventT", "Stream"]
 
+import abc
 import typing
 from collections import abc as collections
 
@@ -42,25 +43,20 @@ if typing.TYPE_CHECKING:
     import types
 
 _T = typing.TypeVar("_T")
-T_co = typing.TypeVar("T_co", covariant=True)
+ValueT = typing.TypeVar("ValueT", covariant=True)
 RawEventT: typing.TypeAlias = collections.Mapping[str, typing.Any]
 CallbackSig: typing.TypeAlias = collections.Callable[[_T], collections.Coroutine[typing.Any, typing.Any, None]]
 EventT = typing.TypeVar("EventT", bound=events.BaseEvent)
 
 
-@typing.runtime_checkable
-class Stream(typing.Protocol[T_co]):
+class Stream(collections.AsyncIterator[ValueT]):
     __slots__ = ()
 
-    def __aiter__(self: _T) -> _T:
-        raise NotImplementedError
-
-    async def __anext__(self) -> T_co:
-        raise NotImplementedError
-
+    @abc.abstractmethod
     def __enter__(self: _T) -> _T:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
@@ -69,33 +65,40 @@ class Stream(typing.Protocol[T_co]):
     ) -> None:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def close(self) -> None:
         raise NotImplementedError
 
-    async def receive(self) -> T_co:
+    @abc.abstractmethod
+    async def receive(self) -> ValueT:
         raise NotImplementedError
 
 
-@typing.runtime_checkable
-class EventManager(typing.Protocol):
+class EventManager(abc.ABC):
     __slots__ = ()
 
+    @abc.abstractmethod
     def dispatch(self, event: events.BaseEvent, /) -> None:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def dispatch_raw(self, event_name: str, payload: RawEventT, /) -> None:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def stream(self, event_type: type[EventT], /, *, buffer_size: int = 100) -> Stream[EventT]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def add_listener(self: _T, event_type: type[EventT], callback: CallbackSig[EventT], /) -> _T:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def with_listener(
         self, event_type: type[EventT], /
     ) -> collections.Callable[[CallbackSig[EventT]], CallbackSig[EventT]]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def remove_listener(self, event_type: type[EventT], callback: CallbackSig[EventT], /) -> None:
         raise NotImplementedError

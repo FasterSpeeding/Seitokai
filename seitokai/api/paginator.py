@@ -33,28 +33,20 @@ from __future__ import annotations
 
 __all__: list[str] = ["Paginator"]
 
+import abc
 import typing
+from collections import abc as collections
 
-if typing.TYPE_CHECKING:
-    from collections import abc as collections
-
-
-ValueT_co = typing.TypeVar("ValueT_co", covariant=True)
-_T = typing.TypeVar("_T")
+ValueT = typing.TypeVar("ValueT")
 
 
-@typing.runtime_checkable
-class Paginator(typing.Protocol[ValueT_co]):
+class Paginator(collections.AsyncIterator[ValueT]):
     __slots__ = ()
 
-    def __aiter__(self: _T) -> _T:
+    @abc.abstractmethod
+    async def collect(self) -> collections.Sequence[ValueT]:
         raise NotImplementedError
 
-    async def __anext__(self) -> ValueT_co:
-        raise NotImplementedError
-
-    async def collect(self) -> collections.Sequence[ValueT_co]:
-        raise NotImplementedError
-
+    @abc.abstractmethod
     def limit(self, count: int, /) -> int:
         raise NotImplementedError

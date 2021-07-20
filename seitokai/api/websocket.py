@@ -33,6 +33,7 @@ from __future__ import annotations
 
 __all__: list[str] = ["CallbackSig", "CallbackSigT", "WebSocketClient"]
 
+import abc
 import typing
 from collections import abc as collections
 
@@ -43,18 +44,21 @@ CallbackSig: typing.TypeAlias = event_manager.CallbackSig[event_manager.RawEvent
 CallbackSigT = typing.TypeVar("CallbackSigT", bound=CallbackSig)
 
 
-@typing.runtime_checkable
-class WebSocketClient(typing.Protocol):
+class WebSocketClient(abc.ABC):
     __slots__ = ()
 
+    @abc.abstractmethod
     def stream(self, name: str, /) -> event_manager.Stream[event_manager.RawEventT]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def add_raw_listener(self: _T, event_name: str, callback: CallbackSig, /) -> _T:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def with_raw_listener(self, name: str, /) -> collections.Callable[[CallbackSigT], CallbackSigT]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def remove_raw_listener(self, event_name: str, callback: CallbackSig, /) -> None:
         raise NotImplementedError

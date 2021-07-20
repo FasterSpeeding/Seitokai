@@ -34,6 +34,7 @@ from __future__ import annotations
 
 __all__: list[str] = ["WebSocketBot"]
 
+import abc
 import typing
 
 if typing.TYPE_CHECKING:
@@ -43,13 +44,13 @@ if typing.TYPE_CHECKING:
     from . import websocket as websocket_api
 
 
-@typing.runtime_checkable
-class WebSocketBot(typing.Protocol):
+class WebSocketBot(abc.ABC):
     """Interface of a WebSocket based Guilded bot."""
 
     __slots__ = ()
 
     @property
+    @abc.abstractmethod
     def event_manager(self) -> event_manager_api.EventManager:
         """The event manager instance used by this bot.
 
@@ -61,6 +62,7 @@ class WebSocketBot(typing.Protocol):
         raise NotImplementedError
 
     @property
+    @abc.abstractmethod
     def is_running(self) -> bool:
         """Whether the bot is running.
 
@@ -72,6 +74,7 @@ class WebSocketBot(typing.Protocol):
         raise NotImplementedError
 
     @property
+    @abc.abstractmethod
     def websocket(self) -> websocket_api.WebSocketClient:
         """The websocket client instance used by this bot.
 
@@ -83,6 +86,7 @@ class WebSocketBot(typing.Protocol):
         raise NotImplementedError
 
     @property
+    @abc.abstractmethod
     def marshaller(self) -> marshaller_api.Marshaller:
         """The marshaller instance used by this bot.
 
@@ -94,6 +98,7 @@ class WebSocketBot(typing.Protocol):
         raise NotImplementedError
 
     @property
+    @abc.abstractmethod
     def rest(self) -> rest_api.RestClient:
         """The REST client instance used by this bot.
 

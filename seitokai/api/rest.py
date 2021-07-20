@@ -33,6 +33,7 @@ from __future__ import annotations
 
 __all__: list[str] = ["RestClient", "UuidIsh"]
 
+import abc
 import typing
 import uuid
 
@@ -45,67 +46,81 @@ if typing.TYPE_CHECKING:
 UuidIsh: typing.TypeAlias = str | uuid.UUID
 
 
-@typing.runtime_checkable
-class RestClient(typing.Protocol):
+class RestClient(abc.ABC):
     __slots__ = ()
 
     @property
+    @abc.abstractmethod
     def is_running(self) -> bool:
         """Whether the client is running."""
         raise NotImplementedError
 
     # Role membership
 
+    @abc.abstractmethod
     async def post_member_role(self, user_id: str, role_id: int, /) -> None:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def delete_member_role(self, user_id: str, role_id: int, /) -> None:
         raise NotImplementedError
 
     # Group membership
 
+    @abc.abstractmethod
     async def put_group_member(self, group_id: str, user_id: str, /) -> None:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def delete_group_member(self, group_id: str, user_id: str, /) -> None:
         raise NotImplementedError
 
     # Forums
 
+    @abc.abstractmethod
     async def post_channel_forum(self, channel_id: UuidIsh, /, *, title: str, content: str) -> forums.ForumThread:
         raise NotImplementedError
 
     # Chat
 
+    @abc.abstractmethod
     async def post_channel_message(self, channel_id: UuidIsh, /, content: str) -> messages.Message:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def iter_channel_messages(self, channel_id: UuidIsh, /) -> paginator.Paginator[messages.Message]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def get_channel_message(self, channel_id: UuidIsh, message_id: UuidIsh, /) -> messages.Message:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def put_channel_message(self, channel_id: UuidIsh, message_id: UuidIsh, /, content: str) -> messages.Message:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def delete_channel_message(self, channel_id: UuidIsh, message_id: UuidIsh, /) -> None:
         raise NotImplementedError
 
     # Reactions
 
+    @abc.abstractmethod
     async def put_content_reaction(self, channel_id: UuidIsh, content_id: UuidIsh, emote_id: int, /) -> None:
         raise NotImplementedError
 
     # List items
 
+    @abc.abstractmethod
     async def post_channel_list(self, channel_id: UuidIsh, /, message: str, *, note: str = ...) -> ...:
         raise NotImplementedError
 
     # Team XP
 
+    @abc.abstractmethod
     async def post_member_xp(self, user_id: UuidIsh, /, amount: int) -> int:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def post_role_xp(self, role_id: UuidIsh, /, amount: int) -> None:
         raise NotImplementedError

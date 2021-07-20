@@ -46,6 +46,7 @@ from .. import events
 from ..api import event_manager as event_manager_api
 
 if typing.TYPE_CHECKING:
+    import types
     from collections import abc as collections
 
     import anyio.abc as anyio_abc
@@ -53,6 +54,7 @@ if typing.TYPE_CHECKING:
 
     from ..api import marshaller as marshaler_api
 
+    _AnyioStreamT = typing.TypeVar("_AnyioStreamT", bound="_AnyioStream[typing.Any]")
     _EventManagerT = typing.TypeVar("_EventManagerT", bound="BaseEventManager")
     _StreamPairT: typing.TypeAlias = tuple[
         memory_streams.MemoryObjectSendStream["_T"], memory_streams.MemoryObjectReceiveStream["_T"]
@@ -73,6 +75,29 @@ async def _catch_exception(
 
     except Exception as exc:
         _LOGGER.exception("Dispatch raised exception", exc_info=exc)
+
+
+@dataclasses.dataclass(slots=True)
+class _AnyioStream(event_manager_api.Stream[_T]):
+    _stream: memory_streams.MemoryObjectReceiveStream[_T]
+
+    def __enter__(self: _AnyioStreamT) -> _AnyioStreamT:
+        self._stream.__enter__()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
+        self._stream.__exit__(exc_type, exc, traceback)
+
+    def close(self) -> None:
+        self._stream.close()
+
+    async def receive(self) -> _T:
+        return await self._stream.receive()
 
 
 @dataclasses.dataclass(slots=True)
@@ -100,8 +125,7 @@ class Dispatchable(typing.Generic[_T]):
 
     def stream_abstract(self, *, buffer_size: int = 100) -> event_manager_api.Stream[_T]:
         stream = self.stream(buffer_size=buffer_size)
-        assert isinstance(stream, event_manager_api.Stream)
-        return stream
+        return _AnyioStream(stream)
 
     def dispatch(self, task_group: anyio_abc.TaskGroup, value: _T) -> None:
         for stream in self._streams.copy():

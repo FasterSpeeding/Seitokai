@@ -33,6 +33,7 @@ from __future__ import annotations
 
 __all__: list[str] = ["JsonArrayT", "JsonObjectT", "JsonIsh", "Marshaller", "TopLevelJsonIsh"]
 
+import abc
 import typing
 
 if typing.TYPE_CHECKING:
@@ -47,26 +48,29 @@ TopLevelJsonIsh: typing.TypeAlias = JsonArrayT | JsonObjectT
 JsonIsh: typing.TypeAlias = str | int | float | bool | JsonArrayT | JsonObjectT
 
 
-@typing.runtime_checkable
-class Marshaller(typing.Protocol):
+class Marshaller(abc.ABC):
     __slots__ = ()
 
     # fourms
 
+    @abc.abstractmethod
     def unmarshall_fourm_thread(self, data: JsonObjectT, /) -> forums.ForumThread:
         raise NotImplementedError
 
     # lists
 
+    @abc.abstractmethod
     def unmarshall_list_item(self, data: JsonObjectT, /) -> lists.ListItem:
         raise NotImplementedError
 
     # messages
 
+    @abc.abstractmethod
     def unmarshall_message(self, data: JsonObjectT, /) -> messages.Message:
         raise NotImplementedError
 
     # reactions
 
+    @abc.abstractmethod
     def unmarshall_content_reaction(self, data: JsonObjectT, /) -> reactions.ContentReaction:
         raise NotImplementedError
