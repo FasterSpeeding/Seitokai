@@ -36,6 +36,7 @@ __all__: list[str] = ["WebSocketBot"]
 import typing
 
 import anyio
+import httpx
 
 from ..api import bot as bot_api
 from ..api import event_manager as event_manager_api
@@ -45,6 +46,7 @@ from ..impl import rest as rest_impl
 from ..impl import websocket as websocket_impl
 
 if typing.TYPE_CHECKING:
+    import ssl
     from collections import abc as collections
 
     from anyio import abc as anyio_abc
@@ -117,12 +119,30 @@ class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
 
         raise RuntimeError("Bot is not running")
 
-    async def run(self) -> None:
+    async def run(
+        self,
+        *,
+        verify: str | bool | ssl.SSLContext = True,
+        http1: bool = True,
+        http2: bool = True,
+        timeout: float | httpx.Timeout = httpx.Timeout(timeout=0.5),
+        limits: httpx.Limits = httpx.Limits(max_connections=100, max_keepalive_connections=20),
+        max_redirects: int = 20,
+        trust_env: bool = True,
+    ) -> None:
         if self._close_scope:
             raise RuntimeError("Bot is already running")
 
         self._join_event = anyio.Event()
-        self._rest.start()
+        self._rest.start(
+            verify=verify,
+            http1=http1,
+            http2=http2,
+            timeout=timeout,
+            limits=limits,
+            max_redirects=max_redirects,
+            trust_env=trust_env,
+        )
         async with anyio.create_task_group() as task_group:
             self._close_scope = task_group.cancel_scope
             task_group.start_soon(self._event_manager.run)
@@ -132,8 +152,8 @@ class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
         self._join_event = None
         self._is_closing = False
 
-    def run_blocking(self) -> None:
-        anyio.run(self.run)
+    def run_blocking(self, *, backend: str = "asyncio") -> None:
+        anyio.run(self.run, backend=backend)
 
     def dispatch(self, event: events.BaseEvent, /) -> None:
         return self._event_manager.dispatch(event)

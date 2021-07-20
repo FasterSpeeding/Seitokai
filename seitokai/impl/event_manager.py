@@ -54,6 +54,9 @@ if typing.TYPE_CHECKING:
     from ..api import marshaller as marshaler_api
 
     _EventManagerT = typing.TypeVar("_EventManagerT", bound="BaseEventManager")
+    _StreamPairT: typing.TypeAlias = tuple[
+        memory_streams.MemoryObjectSendStream["_T"], memory_streams.MemoryObjectReceiveStream["_T"]
+    ]
 
 _T = typing.TypeVar("_T")
 _LOGGER: typing.Final[logging.Logger] = logging.getLogger("seitokai.event_manager")
@@ -91,9 +94,9 @@ class Dispatchable(typing.Generic[_T]):
         self._callbacks.remove(callback)
 
     def stream(self, *, buffer_size: int = 100) -> memory_streams.MemoryObjectReceiveStream[_T]:
-        send, recv = anyio.create_memory_object_stream(buffer_size)
-        self._streams.append(send)
-        return recv
+        streams: _StreamPairT[_T] = anyio.create_memory_object_stream(buffer_size, typing.Any)
+        self._streams.append(streams[0])
+        return streams[1]
 
     def stream_abstract(self, *, buffer_size: int = 100) -> event_manager_api.Stream[_T]:
         stream = self.stream(buffer_size=buffer_size)
@@ -170,7 +173,7 @@ class BaseEventManager(event_manager_api.EventManager):
             return self._dispatchers[event_type]
 
         except KeyError:
-            dispatcher = self._dispatchers[event_type] = Dispatchable()
+            dispatcher = self._dispatchers[event_type] = Dispatchable[typing.Any]()
             return dispatcher
 
     def _get_task_group(self) -> anyio_abc.TaskGroup:

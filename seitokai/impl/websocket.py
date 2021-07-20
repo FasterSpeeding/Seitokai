@@ -236,7 +236,9 @@ class WebSocketClient(websocket_api.WebSocketClient):
             return self._raw_dispatchers[event_name]
 
         except KeyError:
-            dispatcher = self._raw_dispatchers[event_name] = event_manager_impl.Dispatchable()
+            dispatcher = self._raw_dispatchers[event_name] = event_manager_impl.Dispatchable[
+                event_manager_api.RawEventT
+            ]()
             return dispatcher
 
     def stream(
