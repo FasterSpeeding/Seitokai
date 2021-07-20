@@ -29,6 +29,7 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Base models and classes for Guilded websocket dispatch events."""
 from __future__ import annotations
 
 __all__: list[str] = ["BaseEvent"]
@@ -37,4 +38,6 @@ import abc
 
 
 class BaseEvent(abc.ABC):
+    """Base class for all event types."""
+
     __slots__: tuple[str, ...] = ()

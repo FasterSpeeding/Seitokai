@@ -29,6 +29,7 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""User related data-classes and enums used within Seitokai."""
 from __future__ import annotations
 
 __all__: list[str] = ["CreatorType"]
@@ -37,6 +38,13 @@ import enum
 
 
 class CreatorType(enum.Enum):
+    """Enum of the types of creator for a resource."""
+
     BOT = enum.auto()
+    """Type for a resource created by a bot."""
+
     USER = enum.auto()
+    """Type for a resource created by a user."""
+
     WEBHOOK = enum.auto()
+    """Type for a resources created by a webhook."""

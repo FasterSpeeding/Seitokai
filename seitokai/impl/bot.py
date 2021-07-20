@@ -60,6 +60,21 @@ if typing.TYPE_CHECKING:
 
 
 class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
+    """Standard implementation of `seitokai.api.bot.WebSocketBot`.
+
+    Parameters
+    ----------
+    token: str
+        The bot's token.
+
+    Other Parameters
+    ----------------
+    rest_url: str | None
+        The base URL to use in the REST client.
+    websocket_url: str | None
+        The base URL to use in the websocket client.
+    """
+
     __slots__: tuple[str, ...] = (
         "_close_scope",
         "_event_manager",
@@ -70,13 +85,13 @@ class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
         "_websocket",
     )
 
-    def __init__(self, token: str, /, *, base_url: str | None = None, websocket_url: str | None = None) -> None:
+    def __init__(self, token: str, /, *, rest_url: str | None = None, websocket_url: str | None = None) -> None:
         self._close_scope: anyio_abc.CancelScope | None = None
         self._is_closing = False
         self._join_event: anyio.Event | None = None
         self._marshaller = marshaler_impl.Marshaller()
         self._event_manager = event_manager_impl.EventManager(self._marshaller)
-        self._rest = rest_impl.RestClient(token, marshaller=self._marshaller, base_url=base_url)
+        self._rest = rest_impl.RestClient(token, marshaller=self._marshaller, base_url=rest_url)
         self._websocket = websocket_impl.WebSocketClient(token, event_manager=self._event_manager, url=websocket_url)
 
     @property
@@ -100,12 +115,14 @@ class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
         return self._websocket
 
     async def join(self) -> None:
+        """Wait until the bot's closed."""
         if self._join_event:
             await self._join_event.wait()
 
         raise RuntimeError("Bot is not running")
 
     async def close(self) -> None:
+        """Instruct the bot to close and wait until it's finished closing."""
         if self._is_closing:
             return await self.join()
 
@@ -130,6 +147,38 @@ class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
         max_redirects: int = 20,
         trust_env: bool = True,
     ) -> None:
+        """Run the bot and its components asynhcronously.
+
+        !!! note
+            This won't return until the bot has closed.
+
+        Arguments
+        ---------
+        verify: str | bool
+            Whether to verify the SSL certificate in the REST client.
+
+            If a string is passed, it will be used as a path to a CA bundle to use.
+            If a bool is passed, the underlying library will attempt to use the system
+            CA bundle or, if that fails, the bundled one.
+        http1: bool
+            Whether to use HTTP/1.0 or HTTP/1.1 in the REST client.
+        http2: bool
+            Whether to use HTTP/2 in the REST client.
+        timeout: float | httpx.Timeout
+            The request timeout to use within the REST client.
+        limits: httpx.Limits
+            The request limits to use within the REST client.
+        max_redirects: int
+            The maximum number of redirects to follow within the REST client.
+        trust_env: bool
+            Whether to trust the environment variables for configuring the REST client.
+
+        See Also
+        --------
+        WebSocketBot.run_blocking :
+            For how to run the bot as the entry point for the async
+            loop while blocking the current thread.
+        """
         if self._close_scope:
             raise RuntimeError("Bot is already running")
 
@@ -157,8 +206,70 @@ class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
             self._join_event = None
             self._is_closing = False
 
-    def run_blocking(self, *, backend: str = "asyncio") -> None:
-        anyio.run(self.run, backend=backend)
+    def run_blocking(
+        self,
+        *,
+        backend: str = "asyncio",
+        verify: str | bool | ssl.SSLContext = True,
+        http1: bool = True,
+        http2: bool = True,
+        timeout: float | httpx.Timeout = httpx.Timeout(timeout=0.5),
+        limits: httpx.Limits = httpx.Limits(max_connections=100, max_keepalive_connections=20),
+        max_redirects: int = 20,
+        trust_env: bool = True,
+    ) -> None:
+        """Run the bot and its components and block the current thread until it's closed.
+
+        !!! warning
+            The current thread must not be already running an event loop.
+
+        Arguments
+        ---------
+        backend: str
+            Name of the asynchronous event loop implementation to use.
+
+            For more information about this see Anyio's documentation.
+
+            Defaults to asyncio.
+        verify: str | bool
+            Whether to verify the SSL certificate in the REST client.
+
+            If a string is passed, it will be used as a path to a CA bundle to use.
+            If a bool is passed, the underlying library will attempt to use the system
+            CA bundle or, if that fails, the bundled one.
+        http1: bool
+            Whether to use HTTP/1.0 or HTTP/1.1 in the REST client.
+        http2: bool
+            Whether to use HTTP/2 in the REST client.
+        timeout: float | httpx.Timeout
+            The request timeout to use within the REST client.
+        limits: httpx.Limits
+            The request limits to use within the REST client.
+        max_redirects: int
+            The maximum number of redirects to follow within the REST client.
+        trust_env: bool
+            Whether to trust the environment variables for configuring the REST client.
+
+        See Also
+        --------
+        WebSocketBot.run :
+            For how to run the bot asynchronously.
+        """
+        if self._close_scope:
+            raise RuntimeError("Bot is already running")
+
+        async def run() -> None:
+            await self.run(
+                verify=verify,
+                http1=http1,
+                http2=http2,
+                timeout=timeout,
+                limits=limits,
+                max_redirects=max_redirects,
+                trust_env=trust_env,
+            )
+
+        anyio.run(run, backend=backend)
 
     def dispatch(self, event: events.BaseEvent, /) -> None:
         return self._event_manager.dispatch(event)

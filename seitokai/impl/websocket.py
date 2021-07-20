@@ -224,7 +224,7 @@ class WebSocketClient(websocket_api.WebSocketClient):
                 await self._keep_alive(client, task_group)
 
             finally:
-                await self._client.close()
+                await client.close()
                 self._join_event.set()
                 self._cancel_scope = None
                 self._client = None

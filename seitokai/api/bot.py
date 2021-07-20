@@ -29,6 +29,7 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Interface of a WebSocket based Guilded bot."""
 from __future__ import annotations
 
 __all__: list[str] = ["WebSocketBot"]
@@ -44,24 +45,61 @@ if typing.TYPE_CHECKING:
 
 @typing.runtime_checkable
 class WebSocketBot(typing.Protocol):
+    """Interface of a WebSocket based Guilded bot."""
+
     __slots__ = ()
 
     @property
     def event_manager(self) -> event_manager_api.EventManager:
+        """The event manager instance used by this bot.
+
+        Returns
+        -------
+        seitokai.api.event_manager.EventManager
+            The event manager used by this bot.
+        """
         raise NotImplementedError
 
     @property
     def is_running(self) -> bool:
+        """Whether the bot is running.
+
+        Returns
+        -------
+        bool
+            Whether the bot is running.
+        """
         raise NotImplementedError
 
     @property
     def websocket(self) -> websocket_api.WebSocketClient:
+        """The websocket client instance used by this bot.
+
+        Returns
+        -------
+        seitokai.api.websocket.WebSocketClient
+            The websocket client used by this bot.
+        """
         raise NotImplementedError
 
     @property
     def marshaller(self) -> marshaller_api.Marshaller:
+        """The marshaller instance used by this bot.
+
+        Returns
+        -------
+        seitokai.api.marshaller.Marshaller
+            The marshaller used by this bot.
+        """
         raise NotImplementedError
 
     @property
     def rest(self) -> rest_api.RestClient:
+        """The REST client instance used by this bot.
+
+        Returns
+        -------
+        seitokai.api.rest.RestClient
+            The REST client used by this bot.
+        """
         raise NotImplementedError

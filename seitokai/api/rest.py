@@ -51,6 +51,7 @@ class RestClient(typing.Protocol):
 
     @property
     def is_running(self) -> bool:
+        """Whether the client is running."""
         raise NotImplementedError
 
     # Role membership
