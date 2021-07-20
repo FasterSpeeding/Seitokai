@@ -134,23 +134,28 @@ class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
             raise RuntimeError("Bot is already running")
 
         self._join_event = anyio.Event()
-        self._rest.start(
-            verify=verify,
-            http1=http1,
-            http2=http2,
-            timeout=timeout,
-            limits=limits,
-            max_redirects=max_redirects,
-            trust_env=trust_env,
-        )
-        async with anyio.create_task_group() as task_group:
-            self._close_scope = task_group.cancel_scope
-            task_group.start_soon(self._event_manager.run)
-            task_group.start_soon(self._websocket.run)
 
-        self._join_event.set()
-        self._join_event = None
-        self._is_closing = False
+        try:
+            self._rest.start(
+                verify=verify,
+                http1=http1,
+                http2=http2,
+                timeout=timeout,
+                limits=limits,
+                max_redirects=max_redirects,
+                trust_env=trust_env,
+            )
+
+            async with anyio.create_task_group() as task_group:
+                self._close_scope = task_group.cancel_scope
+                task_group.start_soon(self._event_manager.run)
+                task_group.start_soon(self._websocket.run)
+
+        finally:
+            self._join_event.set()
+            self._close_scope = None
+            self._join_event = None
+            self._is_closing = False
 
     def run_blocking(self, *, backend: str = "asyncio") -> None:
         anyio.run(self.run, backend=backend)

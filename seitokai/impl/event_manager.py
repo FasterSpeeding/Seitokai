@@ -190,8 +190,11 @@ class BaseEventManager(event_manager_api.EventManager):
             raise RuntimeError("Already running")
 
         self._task_group = anyio.create_task_group()
-        async with self._task_group:
-            await anyio.sleep_forever()
+        try:
+            async with self._task_group:
+                await anyio.sleep_forever()
+        finally:
+            self._task_group = None
 
     def dispatch(self, event: events.BaseEvent, /) -> None:
         if dispatcher := self._dispatchers.get(type(event)):

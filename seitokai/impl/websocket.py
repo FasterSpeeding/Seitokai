@@ -68,6 +68,7 @@ class _Disconnect(Exception):
 
 class WebSocketClient(websocket_api.WebSocketClient):
     __slots__: tuple[str, ...] = (
+        "_cancel_scope",
         "_client",
         "_event_manager",
         "_join_event",
@@ -80,6 +81,7 @@ class WebSocketClient(websocket_api.WebSocketClient):
     def __init__(
         self, token: str, /, event_manager: event_manager_api.EventManager | None = None, *, url: str | None = None
     ) -> None:
+        self._cancel_scope: anyio.CancelScope | None = None
         self._client: asyncwebsockets.Websocket | None = None
         self._event_manager = event_manager
         self._join_event: anyio.Event | None = None
@@ -202,9 +204,11 @@ class WebSocketClient(websocket_api.WebSocketClient):
             _LOGGER.warning("Ignoring unexpected opcode %s for event payload %r", payload, message)
 
     async def close(self) -> None:
-        client = self._get_ws()
-        self._client = None
-        await client.close()
+        if not self._cancel_scope:
+            raise RuntimeError("Websocket client isn't running")
+
+        self._cancel_scope.cancel()
+        await self.join()
 
     async def run(self, *, ssl_context: bool | ssl.SSLContext = True) -> None:
         if self._client:
@@ -215,13 +219,16 @@ class WebSocketClient(websocket_api.WebSocketClient):
         )
         self._join_event = anyio.Event()
         async with anyio.create_task_group() as task_group:
-            await self._keep_alive(client, task_group)
+            self._cancel_scope = task_group.cancel_scope
+            try:
+                await self._keep_alive(client, task_group)
 
-            if self._join_event:
+            finally:
+                await self._client.close()
                 self._join_event.set()
-
-            task_group.cancel_scope.cancel()
-            self._join_event = None
+                self._cancel_scope = None
+                self._client = None
+                self._join_event = None
 
     async def join(self) -> None:
         if not self._join_event:
