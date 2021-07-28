@@ -75,7 +75,7 @@ class WebSocketBot(bot_api.WebSocketBot, event_manager_api.EventManager):
         The base URL to use in the websocket client.
     """
 
-    __slots__: tuple[str, ...] = (
+    __slots__ = (
         "_close_scope",
         "_event_manager",
         "_is_closing",

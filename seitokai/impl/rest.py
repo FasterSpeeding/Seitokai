@@ -82,7 +82,7 @@ _PUT: typing.Final[str] = "PUT"
 
 
 class RestClient(rest_api.RestClient):
-    __slots__: tuple[str, ...] = ("_base_url", "_client", "_marshaller", "_token")
+    __slots__ = ("_base_url", "_client", "_marshaller", "_token")
 
     def __init__(
         self,

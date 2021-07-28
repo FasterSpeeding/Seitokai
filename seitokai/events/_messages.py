@@ -47,7 +47,7 @@ if typing.TYPE_CHECKING:
 
 
 class MessageEvent(BaseEvent, abc.ABC):
-    __slots__: tuple[str, ...] = ()
+    __slots__ = ()
 
     @property
     @abc.abstractmethod

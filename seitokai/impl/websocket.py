@@ -63,11 +63,11 @@ _PONG: typing.Final[wsproto.events.Pong] = wsproto.events.Pong()
 
 
 class _Disconnect(Exception):
-    __slots__: tuple[str, ...] = ()
+    __slots__ = ()
 
 
 class WebSocketClient(websocket_api.WebSocketClient):
-    __slots__: tuple[str, ...] = (
+    __slots__ = (
         "_cancel_scope",
         "_client",
         "_event_manager",

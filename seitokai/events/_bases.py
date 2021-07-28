@@ -40,4 +40,4 @@ import abc
 class BaseEvent(abc.ABC):
     """Base class for all event types."""
 
-    __slots__: tuple[str, ...] = ()
+    __slots__ = ()

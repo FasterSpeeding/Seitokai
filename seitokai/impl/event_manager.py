@@ -167,7 +167,7 @@ class _ListenerProto(typing.Protocol):
 
 # @dataclasses.dataclass(slots=True)  # Right now this breaks inspect.getmembers
 class BaseEventManager(event_manager_api.EventManager):
-    __slots__: tuple[str, ...] = ("_dispatchers", "_raw_listeners", "_task_group")
+    __slots__ = ("_dispatchers", "_raw_listeners", "_task_group")
 
     # _dispatchers: dict[type[events.BaseEvent], Dispatchable[typing.Any]] = dataclasses.field(
     #     default_factory=dict, init=False
@@ -281,7 +281,7 @@ class BaseEventManager(event_manager_api.EventManager):
 
 # @dataclasses.dataclass(slots=True)  # This messes with inspect.getmembers
 class EventManager(BaseEventManager):
-    __slots__: tuple[str, ...] = ("_marshaller",)
+    __slots__ = ("_marshaller",)
 
     def __init__(self, marshaller: marshaler_api.Marshaller, /) -> None:
         super().__init__()

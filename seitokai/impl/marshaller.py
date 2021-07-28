@@ -56,7 +56,7 @@ def _get_creator_info(data: marshaller_api.JsonObjectT, /) -> tuple[str, users.C
 
 
 class Marshaller(marshaller_api.Marshaller):
-    __slots__: tuple[str, ...] = ()
+    __slots__ = ()
 
     # fourms
 
